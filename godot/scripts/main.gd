@@ -1,9 +1,12 @@
 extends Node3D
 
-## Scene orchestration only. Physical bindings live in project.godot and camera
-## behavior lives in camera_controller.gd.
+## Scene orchestration. The world simulation is decoupled from the 3D view:
+## 20 Hz ecology is interpolated into a player-scale third-person presentation.
 
 const Actions = preload("res://scripts/input_actions.gd")
+const Minimap = preload("res://scripts/world_minimap.gd")
+
+const SIM_TICK_HZ := 20.0
 const HUD_REFRESH_SEC := 0.5
 
 @onready var world_view: Node3D = $WorldView
@@ -12,6 +15,7 @@ const HUD_REFRESH_SEC := 0.5
 @onready var legend: RichTextLabel = %Legend
 @onready var controls_hint: Label = %ControlsHint
 @onready var view_badge: Label = %ViewBadge
+@onready var minimap: Control = %WorldMinimap
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 @onready var ocean: MeshInstance3D = $Ocean
@@ -28,27 +32,39 @@ func _ready() -> void:
 		hud.text = tr("UI_EXTENSION_MISSING")
 		return
 
-	print("SIM: SimWorld GDExtension loaded")
 	_sim = ClassDB.instantiate("SimWorld") as Node
 	_sim.name = "SimWorld"
 	_sim.set("island_mode", true)
-	_sim.set("tick_hz", 60.0)
+	_sim.set("tick_hz", SIM_TICK_HZ)
 	_sim.set("speed_scale", _speed_scale)
 	add_child(_sim)
 	move_child(_sim, 0)
 
-	# Bind the camera first so the first detailed snapshot is already scoped to
-	# the spectator's interest window.
-	_refresh_world_bounds()
-	camera_controller.call("bind_sim", _sim, _world_bounds)
+	var overview := _refresh_world_metadata()
+	var spawn := Minimap.inhabited_spawn(overview)
+	_prepare_render_interest(spawn)
 
 	if world_view.has_method("bind_sim"):
 		world_view.call("bind_sim", _sim)
+	camera_controller.call("bind_sim", _sim, _world_bounds, spawn)
 
-	view_badge.text = tr("UI_VIEW_GOD")
+	if minimap.has_method("bind_sim"):
+		minimap.call("bind_sim", _sim, camera_controller)
+	minimap.connect("teleport_requested", _on_minimap_teleport)
+
+	view_badge.text = tr("UI_VIEW_THIRD_PERSON_GOD")
 	controls_hint.text = tr("HUD_CONTROLS_GOD")
 	_rebuild_legend()
-	print("SIM: entities=", _sim.call("get_entity_count"), " tick=", _sim.call("get_tick_index"))
+	print(
+		"SIM: entities=",
+		_sim.call("get_entity_count"),
+		" tick_hz=",
+		_sim.call("get_tick_hz"),
+		" ecology_hours_per_tick=",
+		_sim.call("get_ecology_hours_per_tick"),
+		" render_radius=",
+		camera_controller.call("render_radius")
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -60,9 +76,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(Actions.SIM_RESET):
 		_sim.call("reset_world")
-		_refresh_world_bounds()
+		var overview := _refresh_world_metadata()
+		var spawn := Minimap.inhabited_spawn(overview)
+		_prepare_render_interest(spawn)
+		if world_view.has_method("refresh_interest_now"):
+			world_view.call("refresh_interest_now")
 		camera_controller.call("set_world_bounds", _world_bounds)
-		camera_controller.call("reset_view")
+		camera_controller.call("teleport_to", spawn)
+		if minimap.has_method("refresh_now"):
+			minimap.call("refresh_now")
 		_rebuild_legend()
 		_hud_clock = 999.0
 		get_viewport().set_input_as_handled()
@@ -139,6 +161,10 @@ func _process(delta: float) -> void:
 	])
 
 
+func _on_minimap_teleport(world_position: Vector3) -> void:
+	camera_controller.call("teleport_to", world_position)
+
+
 func _press_once(event: InputEvent) -> bool:
 	if event is InputEventKey:
 		var key := event as InputEventKey
@@ -153,24 +179,30 @@ func _set_speed(scale: float) -> void:
 	_sim.set("speed_scale", scale)
 
 
-func _refresh_world_bounds() -> void:
-	if _sim == null or not _sim.has_method("get_world_overview"):
-		return
+func _prepare_render_interest(spawn: Vector3) -> void:
+	_sim.set("render_center", Vector3(spawn.x, 0.0, spawn.z))
+	_sim.set("render_radius", float(camera_controller.call("render_radius")))
+	if _sim.has_method("refresh_render_interest"):
+		_sim.call("refresh_render_interest")
 
-	# One low-resolution metadata read at startup/reset only. No overview
-	# renderer or periodic whole-world aggregation remains in the scene.
-	var data: Dictionary = _sim.call("get_world_overview", 16)
+
+func _refresh_world_metadata() -> Dictionary:
+	if _sim == null or not _sim.has_method("get_world_overview"):
+		return {}
+
+	var data: Dictionary = _sim.call("get_world_overview", 48)
 	var width := int(data.get("width", 0))
 	var height := int(data.get("height", 0))
 	var cell_size := float(data.get("cell_size", 0.0))
 	var origin: Vector3 = data.get("origin", Vector3.ZERO)
 	if width <= 0 or height <= 0 or cell_size <= 0.0:
-		return
+		return data
 
 	var world_size := Vector2(float(width) * cell_size, float(height) * cell_size)
 	_world_bounds = Rect2(Vector2(origin.x, origin.z), world_size)
 	var ocean_scale := maxf(world_size.x, world_size.y) * 1.35 / 96.0
 	ocean.scale = Vector3(ocean_scale, 1.0, ocean_scale)
+	return data
 
 
 func _update_daylight(hour: float) -> void:
