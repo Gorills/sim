@@ -1126,7 +1126,12 @@ void test_async_runtime_owns_world_and_publishes_frames() {
     config.bounds_max = {40.0, 20.0, 40.0};
 
     auto world = std::make_unique<sim::World>(config);
+    force_land(*world, 4, 4);
+    const sim::Vec3 plant_position = world->habitat().cell_center(4, 4);
+    const sim::EntityId plant_id =
+        world->enqueue_organism(sim::species::grass, plant_position);
     const sim::EntityId id = world->enqueue_spawn({0.0, 1.0, 0.0}, {2.0, 0.0, 0.0});
+    CHECK(plant_id != 0);
     CHECK(id != 0);
     world->flush_commands();
 
@@ -1155,6 +1160,8 @@ void test_async_runtime_owns_world_and_publishes_frames() {
     CHECK(advanced != nullptr);
     CHECK(advanced != nullptr && advanced->tick >= 2);
     CHECK(advanced != nullptr && advanced->current_render != nullptr);
+    CHECK(advanced != nullptr && advanced->simulation_work.organism_entities >= 1);
+    CHECK(advanced != nullptr && advanced->simulation_work.updated_entities >= 1);
     if (advanced != nullptr && advanced->current_render != nullptr) {
         const auto entity = sim::find_entity(*advanced->current_render, id);
         CHECK(entity.has_value());
