@@ -12,11 +12,19 @@ switches to a top-down or whole-island projection.
 
 God mode keeps:
 
-- horizontal movement through WASD / left stick;
+- camera-relative horizontal movement through WASD / left stick;
 - vertical flight through Q/E or LB/RB;
-- RMB / right-stick camera control;
+- captured-mouse orbit look and right-stick camera control;
+- Escape to release the cursor and RMB to recapture it;
 - wheel-adjustable movement speed;
 - Shift / L3 boost.
+
+The visible avatar turns toward movement independently from camera yaw. Camera
+placement samples the presentation terrain between the avatar and the desired
+7 m orbit position, preventing the camera from dropping through hills. The
+current local ArrayMesh has no physics collider, so a SpringArm3D would not
+provide collision yet; a future physical player should use CharacterBody3D plus
+SpringArm3D once terrain collision exists.
 
 The avatar starts on land in an aggregated overview cell containing organisms.
 The spawn selector weights animals more heavily than vegetation so startup lands
@@ -36,19 +44,24 @@ subdivided four times for presentation. At a 450 m render radius this remains a
 small mesh while avoiding the visibly huge triangles that were acceptable only
 from an aerial camera.
 
-Terrain rebuilds occur when render interest moves and otherwise at a low
-appearance refresh rate. The clean-checkout CI no longer downloads Terrain3D,
-which verifies that the player view has no hidden runtime dependency on it.
+Terrain rebuilds occur only when render interest moves or the view is reset.
+There is no timer-driven full SurfaceTool/normal regeneration in steady state.
+The clean-checkout CI no longer downloads Terrain3D, which verifies that the
+player view has no hidden runtime dependency on it.
 
 ## Organism presentation
 
-Nearby organisms come from `get_render_snapshot()` and remain grouped in
-MultiMeshes by species. MultiMesh capacity grows geometrically and is retained;
-normal population changes alter only `visible_instance_count`.
+Nearby organisms remain grouped in MultiMeshes by species. MultiMesh capacity
+grows geometrically and is retained; normal population changes alter only
+`visible_instance_count`.
 
-Organism transforms are presented at 20 Hz. The simulation snapshot is
-interpolated by the GDExtension, so render FPS does not require running ecology
-at render FPS.
+Ecology still advances at 20 Hz, but organism transforms are presented every
+render frame. On a new simulation tick, `world_view.gd` reads
+`get_current_render_snapshot()` once and caches the previous/current
+Transform3D for each visible entity. Between ticks it reads only the cheap
+`get_render_alpha()` value and interpolates those cached transforms. This keeps
+the expensive GDExtension snapshot/object conversion at simulation rate while
+removing the former 20 FPS presentation cap.
 
 ## Simulation/render decoupling
 
@@ -56,12 +69,14 @@ The island contains roughly nine thousand initial organisms. Running full
 ecology at 60 Hz needlessly performs habitat, canopy, plant, spatial-index, and
 animal updates sixty times per second.
 
-The visualizer now runs ecology at 20 Hz. `SimWorld::set_tick_hz()` scales
-`ecology_hours_per_tick` with the tick interval, preserving the previous
-simulated-hours-per-real-second rate at 1x speed. In other words, the optimization
-reduces update frequency without slowing ecological time.
+The visualizer runs ecology at 20 Hz. `SimWorld::set_tick_hz()` scales
+`ecology_hours_per_tick` with the tick interval. At 1x, one real second advances
+one simulated minute. This is intentionally slower than the former 15 simulated
+minutes per real second: meter-scale animal movement was otherwise presented at
+tens of metres per second and could not read as third-person locomotion.
 
-Simulation speed controls 1x / 4x / 16x remain unchanged.
+Simulation speed controls 1x / 4x / 16x remain unchanged; 4x and 16x are explicit
+time-lapse modes.
 
 ## Debug minimap
 
@@ -86,7 +101,8 @@ semantic actions from `godot/scripts/input_actions.gd`.
 | --- | --- | --- |
 | Move | WASD | left stick / D-pad |
 | Fly down/up | Q / E | LB / RB |
-| Camera | RMB drag | right stick |
+| Camera orbit | captured mouse | right stick |
+| Release / recapture cursor | Esc / RMB | — |
 | Flight speed | mouse wheel | — |
 | Boost | Shift | L3 |
 | Pause | Space | Start |
@@ -98,7 +114,8 @@ semantic actions from `godot/scripts/input_actions.gd`.
 `godot/scripts/check_extension.gd` verifies:
 
 - semantic KBM/gamepad bindings and localization;
-- 20 Hz simulation timing with the preserved ecology-time rate;
+- render snapshot/alpha bridge required by render-rate interpolation;
+- 20 Hz simulation timing with the one-simulated-minute-per-real-second 1x rate;
 - an inhabited land spawn from the aggregated overview;
 - perspective third-person camera distance near 7 m;
 - a fixed 450 m render radius;

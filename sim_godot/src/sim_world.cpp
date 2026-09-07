@@ -19,7 +19,9 @@ using namespace godot;
 
 namespace {
 
-constexpr double kEcologyHoursPerRealSecond = 0.25;
+// Third-person 1x is an observation pace, not a 15-minute-per-second timelapse.
+// One simulated minute per real second keeps meter-scale animal locomotion readable.
+constexpr double kEcologyHoursPerRealSecond = 1.0 / 60.0;
 
 PackedFloat32Array to_packed_floats(const std::vector<double>& values) {
     PackedFloat32Array out;
@@ -78,6 +80,9 @@ void SimWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_render_radius", "radius"), &SimWorld::set_render_radius);
     ClassDB::bind_method(D_METHOD("refresh_render_interest"), &SimWorld::refresh_render_interest);
     ClassDB::bind_method(D_METHOD("get_render_snapshot"), &SimWorld::get_render_snapshot);
+    ClassDB::bind_method(D_METHOD("get_current_render_snapshot"),
+                         &SimWorld::get_current_render_snapshot);
+    ClassDB::bind_method(D_METHOD("get_render_alpha"), &SimWorld::get_render_alpha);
     ClassDB::bind_method(D_METHOD("get_sim_snapshot"), &SimWorld::get_sim_snapshot);
     ClassDB::bind_method(D_METHOD("get_habitat_grid"), &SimWorld::get_habitat_grid);
     ClassDB::bind_method(D_METHOD("get_render_habitat_grid"), &SimWorld::get_render_habitat_grid);
@@ -236,8 +241,16 @@ void SimWorld::refresh_render_interest() {
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_render_snapshot() const {
-    const double alpha = world_ && world_->paused() ? 1.0 : stepper_.alpha();
+    const double alpha = get_render_alpha();
     return make_snapshot(sim::interpolate(previous_, current_, alpha), alpha);
+}
+
+godot::Ref<SimSnapshot> SimWorld::get_current_render_snapshot() const {
+    return make_snapshot(current_, 1.0);
+}
+
+double SimWorld::get_render_alpha() const {
+    return world_ && world_->paused() ? 1.0 : stepper_.alpha();
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_sim_snapshot() const {

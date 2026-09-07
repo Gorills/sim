@@ -50,8 +50,6 @@ var _mesh_cache: Dictionary = {}
 var _material_cache: Dictionary = {}
 const ORGANISM_MESH_DIR := "res://assets/organisms/"
 const RELIEF := 420.0
-const ORGANISM_REFRESH_SEC := 0.05
-const TERRAIN_APPEARANCE_REFRESH_SEC := 5.0
 const TERRAIN_SUBDIVISIONS := 4
 const SAND := Color("#8f8058")
 const SOIL := Color("#66543b")
@@ -62,8 +60,8 @@ const DARK_LEAF := Color("#294e35")
 var _last_tick: int = -1
 var _terrain_signature: String = ""
 var _habitat: Object
-var _terrain_clock: float = 999.0
-var _organism_clock: float = 999.0
+var _organism_targets: Dictionary = {}
+var _organism_groups: Dictionary = {}
 var _last_interest_center := Vector3.INF
 var _terrain_vertex_count := 0
 var _terrain_heights := PackedFloat32Array()
@@ -75,10 +73,13 @@ func bind_sim(sim: Node) -> void:
 	_sim = sim
 	_refresh_catalog()
 	_terrain_signature = ""
-	_terrain_clock = 999.0
-	_organism_clock = 999.0
+	_last_tick = -1
+	_organism_targets.clear()
+	_organism_groups.clear()
 	_last_interest_center = _sim.get("render_center") as Vector3
 	_refresh_terrain(true)
+	_refresh_organisms(true)
+	_present_organisms()
 
 
 func species_color(species_id: int, fallback_id: int = 0) -> Color:
@@ -111,7 +112,8 @@ func refresh_interest_now() -> void:
 		return
 	_last_interest_center = _sim.get("render_center") as Vector3
 	_refresh_terrain(true)
-	_terrain_clock = 0.0
+	_refresh_organisms(true)
+	_present_organisms()
 
 
 func presentation_height(world_position: Vector3) -> float:
@@ -155,7 +157,7 @@ func _ensure_visual_nodes() -> void:
 	_mesh_terrain.visible = true
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if _sim == null:
 		return
 	if _catalog.is_empty():
@@ -166,32 +168,69 @@ func _process(delta: float) -> void:
 		_last_interest_center == Vector3.INF
 		or interest_center.distance_squared_to(_last_interest_center) > 1.0
 	)
-	_terrain_clock += delta
 	if interest_changed or _habitat == null or not _has_terrain_visual():
 		_last_interest_center = interest_center
 		_refresh_terrain(true)
-		_terrain_clock = 0.0
-	elif _terrain_clock >= TERRAIN_APPEARANCE_REFRESH_SEC:
-		_refresh_terrain(false)
-		_terrain_clock = 0.0
 
-	_organism_clock += delta
-	if _organism_clock < ORGANISM_REFRESH_SEC:
-		return
-	_organism_clock = 0.0
+	_refresh_organisms(false)
+	_present_organisms()
 
-	var snap: Object = _sim.call("get_render_snapshot")
-	if snap == null:
+
+func _refresh_organisms(force: bool) -> void:
+	if _sim == null:
 		return
-	var tick := int(snap.get("tick"))
+
+	var tick := int(_sim.call("get_tick_index"))
+	if not force and tick == _last_tick:
+		return
+
 	if tick < _last_tick:
 		_terrain_signature = ""
 		_refresh_catalog()
 		_refresh_terrain(true)
 		_last_interest_center = _sim.get("render_center") as Vector3
-		_terrain_clock = 0.0
-	_last_tick = tick
-	_update_organisms(snap.get("entities") as Array)
+
+	if force or tick < _last_tick:
+		_organism_targets.clear()
+		_organism_groups.clear()
+
+	var snap: Object = (
+		_sim.call("get_current_render_snapshot")
+		if _sim.has_method("get_current_render_snapshot")
+		else _sim.call("get_render_snapshot")
+	)
+	if snap == null:
+		return
+
+	_last_tick = int(snap.get("tick"))
+	_capture_organism_targets(snap.get("entities") as Array)
+
+
+func _present_organisms() -> void:
+	if _sim == null:
+		return
+	var alpha := (
+		float(_sim.call("get_render_alpha"))
+		if _sim.has_method("get_render_alpha")
+		else 1.0
+	)
+	alpha = clampf(alpha, 0.0, 1.0)
+
+	for species_id in _organism_groups.keys():
+		var group: Array = _organism_groups[species_id]
+		var batch: MultiMeshInstance3D = _batches.get(species_id) as MultiMeshInstance3D
+		if batch == null:
+			continue
+		var multimesh := batch.multimesh
+		multimesh.visible_instance_count = group.size()
+		for index in range(group.size()):
+			var pose: Dictionary = group[index]
+			var from_transform: Transform3D = pose["from"]
+			var to_transform: Transform3D = pose["to"]
+			multimesh.set_instance_transform(
+				index,
+				from_transform.interpolate_with(to_transform, alpha)
+			)
 
 
 func _refresh_catalog() -> void:
@@ -528,7 +567,7 @@ func _refresh_terrain(force: bool) -> void:
 		region_origin.z,
 	]
 	var geometry_changed := signature != _terrain_signature or not _has_terrain_visual()
-	if not force and not geometry_changed and _terrain_clock < TERRAIN_APPEARANCE_REFRESH_SEC:
+	if not force and not geometry_changed:
 		return
 
 	_habitat = habitat
@@ -837,15 +876,26 @@ func _cell_color(
 	return land
 
 
-func _update_organisms(entities: Array) -> void:
+func _capture_organism_targets(entities: Array) -> void:
 	var grouped: Dictionary = {}
+	var next_targets: Dictionary = {}
+
 	for entity in entities:
 		if entity == null:
 			continue
 		var species_id := int(entity.get("species_id"))
+		var entity_id := int(entity.get("id"))
+		var target := _organism_transform(entity, species_id, entity_id)
+		next_targets[entity_id] = target
 		if not grouped.has(species_id):
 			grouped[species_id] = []
-		grouped[species_id].append(entity)
+		grouped[species_id].append({
+			"from": _organism_targets.get(entity_id, target),
+			"to": target,
+		})
+
+	_organism_targets = next_targets
+	_organism_groups = grouped
 
 	for species_id in grouped.keys():
 		var group: Array = grouped[species_id]
@@ -853,34 +903,38 @@ func _update_organisms(entities: Array) -> void:
 		if batch == null:
 			batch = _make_batch(int(species_id))
 			_batches[species_id] = batch
-		var multimesh := batch.multimesh
-		_ensure_multimesh_capacity(multimesh, group.size())
-		multimesh.visible_instance_count = group.size()
-		for index in range(group.size()):
-			var entity: Object = group[index]
-			var sim_position: Vector3 = entity.get("position") as Vector3
-			var intent := int(entity.get("intent"))
-			var altitude := _altitude_for_species(int(species_id), intent, sim_position.y)
-			var position: Vector3 = _presentation_position(sim_position, altitude)
-			var shape := str(_shape_by_species.get(int(species_id), "generic"))
-			var scale := _scale_for_entity(int(species_id), float(entity.get("biomass")))
-			var entity_id := int(entity.get("id"))
-			var yaw := _entity_yaw(entity, entity_id)
-			var size_variation := lerpf(0.90, 1.10, _hash_unit(entity_id))
-			var pose_scale := Vector3.ONE
-			if intent == INTENT_RESTING and shape != "tree" and shape != "shrub" and shape != "ground" and shape != "mushroom":
-				pose_scale.y = 0.68
-			var basis := Basis(Vector3.UP, yaw) * Basis.from_scale(
-				pose_scale * scale * size_variation
-			)
-			var transform := Transform3D(basis, position + Vector3.UP * 0.015)
-			multimesh.set_instance_transform(index, transform)
+		_ensure_multimesh_capacity(batch.multimesh, group.size())
+		batch.multimesh.visible_instance_count = group.size()
 
 	for species_id in _batches.keys():
 		if grouped.has(species_id):
 			continue
 		var empty_batch: MultiMeshInstance3D = _batches[species_id]
 		empty_batch.multimesh.visible_instance_count = 0
+
+
+func _organism_transform(entity: Object, species_id: int, entity_id: int) -> Transform3D:
+	var sim_position: Vector3 = entity.get("position") as Vector3
+	var intent := int(entity.get("intent"))
+	var altitude := _altitude_for_species(species_id, intent, sim_position.y)
+	var position: Vector3 = _presentation_position(sim_position, altitude)
+	var shape := str(_shape_by_species.get(species_id, "generic"))
+	var scale := _scale_for_entity(species_id, float(entity.get("biomass")))
+	var yaw := _entity_yaw(entity, entity_id)
+	var size_variation := lerpf(0.90, 1.10, _hash_unit(entity_id))
+	var pose_scale := Vector3.ONE
+	if (
+		intent == INTENT_RESTING
+		and shape != "tree"
+		and shape != "shrub"
+		and shape != "ground"
+		and shape != "mushroom"
+	):
+		pose_scale.y = 0.68
+	var basis := Basis(Vector3.UP, yaw) * Basis.from_scale(
+		pose_scale * scale * size_variation
+	)
+	return Transform3D(basis, position + Vector3.UP * 0.015)
 
 
 func _ensure_multimesh_capacity(multimesh: MultiMesh, required: int) -> void:
