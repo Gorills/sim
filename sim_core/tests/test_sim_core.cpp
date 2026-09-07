@@ -234,8 +234,23 @@ void test_species_catalog_data_driven_web() {
     CHECK(catalog.find("mushroom")->organic_growth_factor > 0.0);
     CHECK(catalog.find("bee")->pollination_deposit_per_hour > 0.0);
     CHECK(catalog.find("bee")->nectar_energy_per_hour > 0.0);
+    CHECK(catalog.find("bee")->perception_radius >= 800.0);
+    CHECK(catalog.find("bee")->home_range_radius >= 1'500.0);
     CHECK(catalog.find("butterfly")->nectar_energy_per_hour > 0.0);
     CHECK(catalog.find("butterfly")->lifespan_hours >= 24.0 * 300.0);
+
+    const sim::SpeciesDefinition* rabbit = catalog.find("rabbit");
+    const sim::SpeciesDefinition* deer = catalog.find("deer");
+    const sim::SpeciesDefinition* wolf = catalog.find("wolf");
+    const sim::SpeciesDefinition* fox = catalog.find("fox");
+    CHECK(rabbit != nullptr && rabbit->home_range_radius >= 300.0);
+    CHECK(rabbit != nullptr && rabbit->movement_per_hour >= 200.0);
+    CHECK(rabbit != nullptr && rabbit->interaction_radius < 1.0);
+    CHECK(deer != nullptr && deer->home_range_radius >= 1'000.0);
+    CHECK(wolf != nullptr && wolf->home_range_radius >= 3'000.0);
+    CHECK(wolf != nullptr && wolf->perception_radius < wolf->home_range_radius);
+    CHECK(wolf != nullptr && wolf->initial_group_size == 4);
+    CHECK(fox != nullptr && fox->home_range_radius >= 1'500.0);
 
     for (const sim::SpeciesDefinition& definition : catalog.all()) {
         for (const sim::SpeciesId food_id : definition.food_species) {
@@ -247,10 +262,10 @@ void test_species_catalog_data_driven_web() {
 void configure_compact_island(sim::WorldConfig& config) {
     config.habitat.width = 48;
     config.habitat.height = 48;
-    config.habitat.cell_size = 0.5;
-    config.habitat.origin = {-12.0, 0.0, -12.0};
-    config.bounds_min = {-12.0, 0.0, -12.0};
-    config.bounds_max = {12.0, 8.0, 12.0};
+    config.habitat.cell_size = 150.0;
+    config.habitat.origin = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_min = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_max = {3'600.0, 500.0, 3'600.0};
 }
 
 sim::IslandScenarioConfig compact_island_populations() {
@@ -280,13 +295,19 @@ sim::IslandScenarioConfig compact_island_populations() {
 
 void test_default_island_scale_and_habitat_snapshot() {
     sim::World world;
-    CHECK(world.habitat().config().width >= 80);
-    CHECK(world.habitat().config().width <= 128);
-    CHECK(world.habitat().config().height == world.habitat().config().width);
+    const sim::HabitatConfig& config = world.habitat().config();
+    CHECK(config.width >= 192);
+    CHECK(config.width <= 320);
+    CHECK(config.height == config.width);
+    CHECK(config.cell_size >= 50.0);
+    CHECK(config.cell_size <= 100.0);
+    const double extent_m = static_cast<double>(config.width) * config.cell_size;
+    CHECK(extent_m >= 15'000.0);
+    CHECK(extent_m <= 25'000.0);
 
     const sim::HabitatSnapshot habitat = world.habitat_snapshot();
-    CHECK(habitat.width == world.habitat().config().width);
-    CHECK(habitat.height == world.habitat().config().height);
+    CHECK(habitat.width == config.width);
+    CHECK(habitat.height == config.height);
     CHECK(habitat.elevation.size() == world.habitat().size());
     CHECK(habitat.moisture.size() == habitat.elevation.size());
     CHECK(habitat.surface.size() == habitat.elevation.size());
@@ -297,18 +318,73 @@ void test_default_island_scale_and_habitat_snapshot() {
     bool has_ocean = false;
     bool has_land = false;
     bool has_fresh_water = false;
+    std::size_t land_cells = 0;
     for (std::size_t i = 0; i < habitat.surface.size(); ++i) {
         has_ocean = has_ocean || habitat.surface[i] == 1;
         has_land = has_land || habitat.surface[i] == 0;
         has_fresh_water = has_fresh_water || habitat.surface[i] == 2;
-        if (habitat.surface[i] == 1) {
+        if (habitat.surface[i] != 1) {
+            ++land_cells;
+        } else {
             CHECK(habitat.elevation[i] <= 0.0);
         }
     }
+    const double land_area_km2 =
+        static_cast<double>(land_cells) * config.cell_size * config.cell_size / 1'000'000.0;
+    CHECK(land_area_km2 >= 150.0);
+    CHECK(land_area_km2 <= 300.0);
     CHECK(has_ocean);
     CHECK(has_land);
     CHECK(has_fresh_water);
     CHECK(world.snapshot().mean_organic > 0.0);
+
+    sim::IslandScenarioConfig island;
+    CHECK(island.wolf == 4);
+    CHECK(island.fox >= island.wolf * 2);
+    CHECK(island.rabbit >= island.wolf * 50);
+    CHECK(island.deer >= island.wolf * 10);
+}
+
+void test_interest_snapshots_and_overview() {
+    sim::World world;
+    const sim::EntityId near_id = world.enqueue_spawn({0.0, 1.0, 0.0}, {});
+    const sim::EntityId far_id = world.enqueue_spawn({4'000.0, 1.0, 0.0}, {});
+
+    sim::Vec3 animal_position{};
+    bool found_land = false;
+    const sim::HabitatConfig& config = world.habitat().config();
+    for (std::size_t z = 0; z < config.height && !found_land; ++z) {
+        for (std::size_t x = 0; x < config.width && !found_land; ++x) {
+            if (!world.habitat().cell(x, z).water) {
+                animal_position = world.habitat().cell_center(x, z);
+                found_land = true;
+            }
+        }
+    }
+    CHECK(found_land);
+    CHECK(world.enqueue_organism(sim::species::rabbit, animal_position) != 0);
+    world.flush_commands();
+
+    const sim::Snapshot local = world.snapshot({0.0, 0.0, 0.0}, 750.0);
+    CHECK(sim::find_entity(local, near_id).has_value());
+    CHECK(!sim::find_entity(local, far_id).has_value());
+
+    const sim::HabitatSnapshot region = world.habitat_snapshot({0.0, 0.0, 0.0}, 1'000.0);
+    CHECK(region.width > 0);
+    CHECK(region.height > 0);
+    CHECK(region.width < config.width);
+    CHECK(region.height < config.height);
+
+    const sim::OverviewSnapshot overview = world.overview_snapshot(64);
+    CHECK(overview.width <= 64);
+    CHECK(overview.height <= 64);
+    CHECK(overview.surface.size() == overview.width * overview.height);
+    CHECK(overview.herbivores.size() == overview.surface.size());
+    std::uint64_t herbivores = 0;
+    for (const std::uint32_t count : overview.herbivores) {
+        herbivores += count;
+    }
+    CHECK(herbivores == 1);
 }
 
 void test_biome_layers_affect_dynamics() {
@@ -403,18 +479,20 @@ void test_prey_flees_from_a_nearby_predator() {
     config.climate_start_hour = 24.0 * 120.0 + 19.0;
     config.habitat.width = 20;
     config.habitat.height = 20;
-    config.habitat.cell_size = 1.0;
-    config.habitat.origin = {-10.0, 0.0, -10.0};
-    config.bounds_min = {-10.0, 0.0, -10.0};
-    config.bounds_max = {10.0, 8.0, 10.0};
+    config.habitat.cell_size = 50.0;
+    config.habitat.origin = {-500.0, 0.0, -500.0};
+    config.bounds_min = {-500.0, 0.0, -500.0};
+    config.bounds_max = {500.0, 500.0, 500.0};
     sim::World world(config);
 
     sim::Vec3 rabbit_at{};
     sim::Vec3 wolf_at{};
     bool placed = false;
     for (std::size_t z = 2; z < 18 && !placed; ++z) {
-        for (std::size_t x = 2; x + 3 < 18 && !placed; ++x) {
-            if (!world.habitat().cell(x, z).water &&
+        for (std::size_t x = 4; x + 3 < 18 && !placed; ++x) {
+            if (!world.habitat().cell(x - 2, z).water &&
+                !world.habitat().cell(x - 1, z).water &&
+                !world.habitat().cell(x, z).water &&
                 !world.habitat().cell(x + 1, z).water &&
                 !world.habitat().cell(x + 2, z).water &&
                 !world.habitat().cell(x + 3, z).water) {
@@ -428,18 +506,28 @@ void test_prey_flees_from_a_nearby_predator() {
     const sim::EntityId rabbit =
         world.enqueue_organism(sim::species::rabbit, rabbit_at, 20.0, 24.0 * 120.0);
     CHECK(rabbit != 0);
-    CHECK(world.enqueue_organism(sim::species::wolf, wolf_at, 20.0, 24.0 * 800.0) != 0);
+    const sim::EntityId wolf =
+        world.enqueue_organism(sim::species::wolf, wolf_at, 20.0, 24.0 * 800.0);
+    CHECK(wolf != 0);
     world.flush_commands();
     world.tick();
-    const auto before_flight = sim::find_entity(world.snapshot(), rabbit);
+    const sim::Snapshot before = world.snapshot();
+    const auto before_flight = sim::find_entity(before, rabbit);
+    const auto before_wolf = sim::find_entity(before, wolf);
     CHECK(before_flight.has_value());
+    CHECK(before_wolf.has_value());
     world.tick();
-    const auto after = sim::find_entity(world.snapshot(), rabbit);
+    const sim::Snapshot after_snapshot = world.snapshot();
+    const auto after = sim::find_entity(after_snapshot, rabbit);
+    const auto after_wolf = sim::find_entity(after_snapshot, wolf);
     CHECK(after.has_value());
-    if (before_flight.has_value() && after.has_value()) {
+    CHECK(after_wolf.has_value());
+    if (before_flight.has_value() && before_wolf.has_value() &&
+        after.has_value() && after_wolf.has_value()) {
         CHECK(after->intent == sim::BehaviorIntent::fleeing);
-        CHECK(sim::length(after->position - wolf_at) >
-              sim::length(before_flight->position - wolf_at));
+        const sim::Vec3 away = before_flight->position - before_wolf->position;
+        const sim::Vec3 movement = after->position - before_flight->position;
+        CHECK(away.x * movement.x + away.z * movement.z > 0.0);
     }
 }
 
@@ -450,10 +538,10 @@ void test_roaming_keeps_a_persistent_local_target() {
     config.climate_start_hour = 24.0 * 120.0 + 21.0;
     config.habitat.width = 24;
     config.habitat.height = 24;
-    config.habitat.cell_size = 1.0;
-    config.habitat.origin = {-12.0, 0.0, -12.0};
-    config.bounds_min = {-12.0, 0.0, -12.0};
-    config.bounds_max = {12.0, 8.0, 12.0};
+    config.habitat.cell_size = 300.0;
+    config.habitat.origin = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_min = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_max = {3'600.0, 500.0, 3'600.0};
     sim::World world(config);
 
     sim::Vec3 position{};
@@ -707,6 +795,7 @@ int main() {
     test_habitat_large_steps_cover_full_interval();
     test_species_catalog_data_driven_web();
     test_default_island_scale_and_habitat_snapshot();
+    test_interest_snapshots_and_overview();
     test_biome_layers_affect_dynamics();
     test_animals_do_not_overshoot_food_on_long_ticks();
     test_prey_flees_from_a_nearby_predator();

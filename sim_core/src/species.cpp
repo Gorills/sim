@@ -37,6 +37,24 @@ SpeciesDefinition base_animal(SpeciesId id,
     return definition;
 }
 
+void scale_spatial_parameters(SpeciesDefinition& definition) {
+    if (is_animal(definition.kind)) {
+        definition.movement_per_hour *= 220.0;
+        definition.perception_radius *= 70.0;
+        definition.home_range_radius =
+            definition.home_range_radius * definition.home_range_radius * 17.0;
+        definition.social_radius *= 80.0;
+        definition.flee_radius *= 70.0;
+    } else if (definition.kind == EntityKind::plant) {
+        definition.seed_dispersal_radius *= 20.0;
+    }
+}
+
+bool add_scaled_species(SpeciesCatalog& catalog, SpeciesDefinition definition) {
+    scale_spatial_parameters(definition);
+    return catalog.add(std::move(definition));
+}
+
 } // namespace
 
 bool SpeciesCatalog::add(SpeciesDefinition definition) {
@@ -81,7 +99,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         grass_def.shade_preference = -0.55;
         grass_def.litter_organic_per_hour = 0.00008;
         grass_def.seed_dispersal_radius = 1.2;
-        catalog.add(std::move(grass_def));
+        add_scaled_species(catalog, std::move(grass_def));
     }
 
     {
@@ -104,7 +122,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         clover_def.pollination_requirement = 0.18;
         clover_def.litter_organic_per_hour = 0.00005;
         clover_def.seed_dispersal_radius = 1.1;
-        catalog.add(std::move(clover_def));
+        add_scaled_species(catalog, std::move(clover_def));
     }
 
     {
@@ -130,7 +148,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         oak_def.litter_organic_per_hour = 0.00045;
         oak_def.seed_dispersal_radius = 2.4;
         oak_def.cruise_height = 0.55;
-        catalog.add(std::move(oak_def));
+        add_scaled_species(catalog, std::move(oak_def));
     }
 
     {
@@ -156,7 +174,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         birch_def.litter_organic_per_hour = 0.00032;
         birch_def.seed_dispersal_radius = 2.8;
         birch_def.cruise_height = 0.5;
-        catalog.add(std::move(birch_def));
+        add_scaled_species(catalog, std::move(birch_def));
     }
 
     {
@@ -181,7 +199,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         pine_def.litter_organic_per_hour = 0.00038;
         pine_def.seed_dispersal_radius = 3.0;
         pine_def.cruise_height = 0.58;
-        catalog.add(std::move(pine_def));
+        add_scaled_species(catalog, std::move(pine_def));
     }
 
     {
@@ -207,7 +225,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         berry_def.litter_organic_per_hour = 0.00012;
         berry_def.seed_dispersal_radius = 1.6;
         berry_def.cruise_height = 0.38;
-        catalog.add(std::move(berry_def));
+        add_scaled_species(catalog, std::move(berry_def));
     }
 
     {
@@ -229,7 +247,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         fern_def.shade_preference = 0.72;
         fern_def.litter_organic_per_hour = 0.00007;
         fern_def.seed_dispersal_radius = 1.0;
-        catalog.add(std::move(fern_def));
+        add_scaled_species(catalog, std::move(fern_def));
     }
 
     {
@@ -252,7 +270,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         reeds_def.litter_organic_per_hour = 0.00016;
         reeds_def.seed_dispersal_radius = 1.8;
         reeds_def.cruise_height = 0.42;
-        catalog.add(std::move(reeds_def));
+        add_scaled_species(catalog, std::move(reeds_def));
     }
 
     {
@@ -276,7 +294,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         mushroom_def.organic_growth_factor = 1.0;
         mushroom_def.seed_dispersal_radius = 0.9;
         mushroom_def.cruise_height = 0.16;
-        catalog.add(std::move(mushroom_def));
+        add_scaled_species(catalog, std::move(mushroom_def));
     }
 
     {
@@ -309,7 +327,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         rabbit_def.activity_peak_hour = 19.0;
         rabbit_def.active_hours_per_day = 14.0;
         rabbit_def.initial_group_size = 6;
-        catalog.add(std::move(rabbit_def));
+        add_scaled_species(catalog, std::move(rabbit_def));
     }
 
     {
@@ -345,7 +363,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         deer_def.activity_peak_hour = 7.0;
         deer_def.active_hours_per_day = 16.0;
         deer_def.initial_group_size = 7;
-        catalog.add(std::move(deer_def));
+        add_scaled_species(catalog, std::move(deer_def));
     }
 
     {
@@ -382,7 +400,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         mouse_def.activity_peak_hour = 23.0;
         mouse_def.active_hours_per_day = 12.0;
         mouse_def.initial_group_size = 8;
-        catalog.add(std::move(mouse_def));
+        add_scaled_species(catalog, std::move(mouse_def));
     }
 
     {
@@ -418,7 +436,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         hare_def.activity_peak_hour = 19.0;
         hare_def.active_hours_per_day = 13.0;
         hare_def.initial_group_size = 4;
-        catalog.add(std::move(hare_def));
+        add_scaled_species(catalog, std::move(hare_def));
     }
 
     {
@@ -453,7 +471,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         boar_def.activity_peak_hour = 18.0;
         boar_def.active_hours_per_day = 15.0;
         boar_def.initial_group_size = 6;
-        catalog.add(std::move(boar_def));
+        add_scaled_species(catalog, std::move(boar_def));
     }
 
     {
@@ -486,8 +504,8 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         wolf_def.hunt_speed_multiplier = 1.8;
         wolf_def.activity_peak_hour = 21.0;
         wolf_def.active_hours_per_day = 15.0;
-        wolf_def.initial_group_size = 2;
-        catalog.add(std::move(wolf_def));
+        wolf_def.initial_group_size = 4;
+        add_scaled_species(catalog, std::move(wolf_def));
     }
 
     {
@@ -518,7 +536,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         fox_def.hunt_speed_multiplier = 1.75;
         fox_def.activity_peak_hour = 22.0;
         fox_def.active_hours_per_day = 14.0;
-        catalog.add(std::move(fox_def));
+        add_scaled_species(catalog, std::move(fox_def));
     }
 
     {
@@ -533,7 +551,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         bee_def.metabolism_per_hour = 0.0007;
         bee_def.dehydration_per_hour = 0.0016;
         bee_def.movement_per_hour = 2.2;
-        bee_def.perception_radius = 8.0;
+        bee_def.perception_radius = 12.0;
         bee_def.interaction_radius = 0.35;
         bee_def.bite_biomass_per_hour = 0.002;
         bee_def.maturity_hours = 24.0 * 20.0;
@@ -547,7 +565,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         bee_def.forage_energy_fraction = 0.78;
         bee_def.activity_min_temperature = 7.0;
         bee_def.cruise_height = 1.05;
-        bee_def.home_range_radius = 7.0;
+        bee_def.home_range_radius = 10.0;
         bee_def.decision_interval_hours = 0.8;
         bee_def.rest_duration_hours = 0.45;
         bee_def.social_radius = 5.0;
@@ -555,7 +573,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         bee_def.activity_peak_hour = 13.0;
         bee_def.active_hours_per_day = 11.0;
         bee_def.initial_group_size = 12;
-        catalog.add(std::move(bee_def));
+        add_scaled_species(catalog, std::move(bee_def));
     }
 
     {
@@ -592,7 +610,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         butterfly_def.activity_peak_hour = 13.0;
         butterfly_def.active_hours_per_day = 10.0;
         butterfly_def.initial_group_size = 6;
-        catalog.add(std::move(butterfly_def));
+        add_scaled_species(catalog, std::move(butterfly_def));
     }
 
     {
@@ -628,7 +646,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         beetle_def.activity_peak_hour = 22.0;
         beetle_def.active_hours_per_day = 12.0;
         beetle_def.initial_group_size = 6;
-        catalog.add(std::move(beetle_def));
+        add_scaled_species(catalog, std::move(beetle_def));
     }
 
     {
@@ -663,7 +681,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         ant_def.activity_peak_hour = 14.0;
         ant_def.active_hours_per_day = 15.0;
         ant_def.initial_group_size = 24;
-        catalog.add(std::move(ant_def));
+        add_scaled_species(catalog, std::move(ant_def));
     }
 
     return catalog;

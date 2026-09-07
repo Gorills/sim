@@ -12,26 +12,26 @@ class World;
 
 struct IslandScenarioConfig {
     std::uint64_t seed = 42;
-    std::size_t grass = 220;
-    std::size_t clover = 90;
-    std::size_t oak = 14;
-    std::size_t birch = 12;
-    std::size_t pine = 12;
-    std::size_t berry_bush = 40;
-    std::size_t fern = 48;
-    std::size_t reeds = 28;
-    std::size_t mushroom = 36;
-    std::size_t rabbit = 22;
-    std::size_t deer = 7;
-    std::size_t mouse = 28;
-    std::size_t hare = 16;
-    std::size_t boar = 6;
-    std::size_t wolf = 2;
-    std::size_t fox = 4;
-    std::size_t bee = 24;
-    std::size_t butterfly = 18;
-    std::size_t beetle = 22;
-    std::size_t ant = 24;
+    std::size_t grass = 1'200;
+    std::size_t clover = 450;
+    std::size_t oak = 90;
+    std::size_t birch = 70;
+    std::size_t pine = 90;
+    std::size_t berry_bush = 180;
+    std::size_t fern = 220;
+    std::size_t reeds = 120;
+    std::size_t mushroom = 160;
+    std::size_t rabbit = 240;
+    std::size_t deer = 60;
+    std::size_t mouse = 300;
+    std::size_t hare = 120;
+    std::size_t boar = 30;
+    std::size_t wolf = 4;
+    std::size_t fox = 10;
+    std::size_t bee = 120;
+    std::size_t butterfly = 90;
+    std::size_t beetle = 120;
+    std::size_t ant = 160;
 };
 
 struct SeededPopulation {

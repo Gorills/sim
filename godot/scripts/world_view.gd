@@ -50,8 +50,8 @@ var _flying_by_species: Dictionary = {}
 var _mesh_cache: Dictionary = {}
 var _material_cache: Dictionary = {}
 const ORGANISM_MESH_DIR := "res://assets/organisms/"
-const RELIEF := 2.4
-const TERRAIN_REFRESH_SEC := 1.0
+const RELIEF := 420.0
+const TERRAIN_REFRESH_SEC := 0.35
 const SAND := Color("#8f8058")
 const SOIL := Color("#66543b")
 const TRUNK := Color("#59442f")
@@ -513,7 +513,11 @@ func _has_terrain_visual() -> bool:
 func _refresh_terrain(force: bool) -> void:
 	if _sim == null or not _sim.has_method("get_habitat_grid"):
 		return
-	var habitat: Object = _sim.call("get_habitat_grid")
+	var habitat: Object = (
+		_sim.call("get_render_habitat_grid")
+		if _sim.has_method("get_render_habitat_grid")
+		else _sim.call("get_habitat_grid")
+	)
 	if habitat == null:
 		return
 	var width := int(habitat.get("width"))
@@ -521,7 +525,14 @@ func _refresh_terrain(force: bool) -> void:
 	if width <= 0 or height <= 0:
 		return
 	_habitat = habitat
-	var signature := "%s:%s:%s" % [width, height, str(habitat.get("cell_size"))]
+	var region_origin: Vector3 = habitat.get("origin")
+	var signature := "%s:%s:%s:%.2f:%.2f" % [
+		width,
+		height,
+		str(habitat.get("cell_size")),
+		region_origin.x,
+		region_origin.z,
+	]
 	var geometry_changed := signature != _terrain_signature or not _has_terrain_visual()
 	if force or geometry_changed or _terrain_clock >= TERRAIN_REFRESH_SEC:
 		_terrain_signature = signature
@@ -626,11 +637,18 @@ func _build_fresh_water_mesh(habitat: Object) -> void:
 			var z0 := origin.z + float(z) * cell_size
 			var x1 := x0 + cell_size
 			var z1 := z0 + cell_size
+			var stride := width + 1
+			var water_y := (
+				_terrain_heights[z * stride + x]
+				+ _terrain_heights[(z + 1) * stride + x]
+				+ _terrain_heights[(z + 1) * stride + x + 1]
+				+ _terrain_heights[z * stride + x + 1]
+			) * 0.25 + 0.18
 			for point in [
-				Vector3(x0, 0.028, z0),
-				Vector3(x0, 0.028, z1),
-				Vector3(x1, 0.028, z1),
-				Vector3(x1, 0.028, z0),
+				Vector3(x0, water_y, z0),
+				Vector3(x0, water_y, z1),
+				Vector3(x1, water_y, z1),
+				Vector3(x1, water_y, z0),
 			]:
 				st.set_color(fresh_color)
 				st.add_vertex(point)

@@ -40,9 +40,17 @@ public:
     [[nodiscard]] int64_t get_tick_index() const;
     [[nodiscard]] int64_t get_entity_count() const;
 
+    void set_render_center(godot::Vector3 center);
+    [[nodiscard]] godot::Vector3 get_render_center() const;
+    void set_render_radius(double radius);
+    [[nodiscard]] double get_render_radius() const;
+    void refresh_render_interest();
+
     [[nodiscard]] godot::Ref<SimSnapshot> get_render_snapshot() const;
     [[nodiscard]] godot::Ref<SimSnapshot> get_sim_snapshot() const;
     [[nodiscard]] godot::Ref<SimHabitatGrid> get_habitat_grid() const;
+    [[nodiscard]] godot::Ref<SimHabitatGrid> get_render_habitat_grid() const;
+    [[nodiscard]] godot::Dictionary get_world_overview(int32_t resolution) const;
     [[nodiscard]] godot::Array get_species_catalog() const;
     [[nodiscard]] godot::Dictionary get_ecosystem_stats() const;
 
@@ -71,4 +79,6 @@ private:
     bool island_mode_ = true;
     bool demo_spawned_ = false;
     double speed_scale_ = 1.0;
+    sim::Vec3 render_center_{};
+    double render_radius_ = 1'800.0;
 };

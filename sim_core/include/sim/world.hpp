@@ -18,8 +18,8 @@ namespace sim {
 struct WorldConfig {
     double tick_dt = 1.0 / 60.0;
     double ecology_hours_per_tick = 1.0 / 60.0;
-    Vec3 bounds_min{-24.0, 0.0, -24.0};
-    Vec3 bounds_max{24.0, 8.0, 24.0};
+    Vec3 bounds_min{-9'600.0, 0.0, -9'600.0};
+    Vec3 bounds_max{9'600.0, 500.0, 9'600.0};
     HabitatConfig habitat{};
     ClimateConfig climate{};
     double climate_start_hour = 24.0 * 120.0 + 8.0;
@@ -95,7 +95,10 @@ public:
     void set_tick_dt(double tick_dt);
 
     [[nodiscard]] Snapshot snapshot() const;
+    [[nodiscard]] Snapshot snapshot(Vec3 center, double radius) const;
     [[nodiscard]] HabitatSnapshot habitat_snapshot() const;
+    [[nodiscard]] HabitatSnapshot habitat_snapshot(Vec3 center, double radius) const;
+    [[nodiscard]] OverviewSnapshot overview_snapshot(std::size_t resolution = 96) const;
     [[nodiscard]] std::uint64_t tick_index() const noexcept { return tick_index_; }
     [[nodiscard]] double tick_dt() const noexcept { return config_.tick_dt; }
     [[nodiscard]] bool paused() const noexcept { return paused_; }

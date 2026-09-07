@@ -134,6 +134,10 @@ double World::hour_of_day() const noexcept {
 }
 
 Snapshot World::snapshot() const {
+    return snapshot({}, -1.0);
+}
+
+Snapshot World::snapshot(Vec3 center, double radius) const {
     Snapshot snap;
     snap.tick = tick_index_;
     snap.tick_dt = config_.tick_dt;
@@ -147,8 +151,15 @@ Snapshot World::snapshot() const {
     snap.mean_pollination = habitat_.mean_pollination();
     snap.year_phase = year_phase();
     snap.hour_of_day = hour_of_day();
-    snap.entities.reserve(entities_.size());
+
+    const bool filtered = std::isfinite(radius) && radius >= 0.0;
+    const double radius_squared = radius * radius;
+    snap.entities.reserve(filtered ? std::min<std::size_t>(entities_.size(), 4'096)
+                                   : entities_.size());
     for (const Entity& entity : entities_) {
+        if (filtered && horizontal_distance_squared(entity.position, center) > radius_squared) {
+            continue;
+        }
         EntityState state;
         state.id = entity.id;
         state.position = entity.position;
@@ -200,6 +211,156 @@ HabitatSnapshot World::habitat_snapshot() const {
         }
     }
     return snap;
+}
+
+HabitatSnapshot World::habitat_snapshot(Vec3 center, double radius) const {
+    const HabitatConfig& habitat_config = habitat_.config();
+    if (!std::isfinite(radius) || radius <= 0.0) {
+        return habitat_snapshot();
+    }
+
+    const double world_min_x = habitat_config.origin.x;
+    const double world_min_z = habitat_config.origin.z;
+    const double world_max_x =
+        world_min_x + static_cast<double>(habitat_config.width) * habitat_config.cell_size;
+    const double world_max_z =
+        world_min_z + static_cast<double>(habitat_config.height) * habitat_config.cell_size;
+    if (center.x + radius < world_min_x || center.x - radius >= world_max_x ||
+        center.z + radius < world_min_z || center.z - radius >= world_max_z) {
+        HabitatSnapshot empty;
+        empty.cell_size = habitat_config.cell_size;
+        empty.origin = center;
+        return empty;
+    }
+
+    const auto cell_index = [](double value, double origin, double cell_size,
+                               std::size_t limit) {
+        const double local = std::floor((value - origin) / cell_size);
+        const auto signed_index = static_cast<std::int64_t>(local);
+        return static_cast<std::size_t>(
+            std::clamp<std::int64_t>(signed_index, 0, static_cast<std::int64_t>(limit - 1)));
+    };
+    const std::size_t min_x =
+        cell_index(center.x - radius, world_min_x, habitat_config.cell_size, habitat_config.width);
+    const std::size_t max_x =
+        cell_index(center.x + radius, world_min_x, habitat_config.cell_size, habitat_config.width);
+    const std::size_t min_z =
+        cell_index(center.z - radius, world_min_z, habitat_config.cell_size, habitat_config.height);
+    const std::size_t max_z =
+        cell_index(center.z + radius, world_min_z, habitat_config.cell_size, habitat_config.height);
+
+    HabitatSnapshot snap;
+    snap.width = max_x - min_x + 1;
+    snap.height = max_z - min_z + 1;
+    snap.cell_size = habitat_config.cell_size;
+    snap.origin = {world_min_x + static_cast<double>(min_x) * habitat_config.cell_size,
+                   habitat_config.origin.y,
+                   world_min_z + static_cast<double>(min_z) * habitat_config.cell_size};
+    const std::size_t count = snap.width * snap.height;
+    snap.elevation.resize(count);
+    snap.moisture.resize(count);
+    snap.nutrients.resize(count);
+    snap.temperature.resize(count);
+    snap.canopy.resize(count);
+    snap.light.resize(count);
+    snap.organic.resize(count);
+    snap.pollination.resize(count);
+    snap.surface.resize(count);
+
+    for (std::size_t z = min_z; z <= max_z; ++z) {
+        for (std::size_t x = min_x; x <= max_x; ++x) {
+            const HabitatCell& cell = habitat_.cell(x, z);
+            const std::size_t i = (z - min_z) * snap.width + (x - min_x);
+            snap.elevation[i] = cell.elevation;
+            snap.moisture[i] = cell.moisture;
+            snap.nutrients[i] = cell.nutrients;
+            snap.temperature[i] = cell.temperature;
+            snap.canopy[i] = cell.canopy;
+            snap.light[i] = cell.light;
+            snap.organic[i] = cell.organic;
+            snap.pollination[i] = cell.pollination;
+            snap.surface[i] = static_cast<std::uint8_t>(surface_kind(cell));
+        }
+    }
+    return snap;
+}
+
+OverviewSnapshot World::overview_snapshot(std::size_t resolution) const {
+    const HabitatConfig& habitat_config = habitat_.config();
+    const std::size_t max_dimension = std::max(habitat_config.width, habitat_config.height);
+    resolution = std::clamp<std::size_t>(resolution, 1, max_dimension);
+    const std::size_t scale = std::max<std::size_t>(
+        1, (max_dimension + resolution - 1) / resolution);
+
+    OverviewSnapshot out;
+    out.width = (habitat_config.width + scale - 1) / scale;
+    out.height = (habitat_config.height + scale - 1) / scale;
+    out.cell_size = habitat_config.cell_size * static_cast<double>(scale);
+    out.origin = habitat_config.origin;
+    const std::size_t count = out.width * out.height;
+    out.surface.assign(count, static_cast<std::uint8_t>(SurfaceKind::ocean));
+    out.plants.assign(count, 0);
+    out.herbivores.assign(count, 0);
+    out.omnivores.assign(count, 0);
+    out.carnivores.assign(count, 0);
+    out.insects.assign(count, 0);
+
+    std::vector<std::uint32_t> land(count, 0);
+    std::vector<std::uint32_t> ocean(count, 0);
+    std::vector<std::uint32_t> fresh(count, 0);
+    for (std::size_t z = 0; z < habitat_config.height; ++z) {
+        for (std::size_t x = 0; x < habitat_config.width; ++x) {
+            const std::size_t overview_index = (z / scale) * out.width + (x / scale);
+            switch (surface_kind(habitat_.cell(x, z))) {
+            case SurfaceKind::land:
+                ++land[overview_index];
+                break;
+            case SurfaceKind::ocean:
+                ++ocean[overview_index];
+                break;
+            case SurfaceKind::fresh_water:
+                ++fresh[overview_index];
+                break;
+            }
+        }
+    }
+    for (std::size_t i = 0; i < count; ++i) {
+        const std::uint32_t total = land[i] + ocean[i] + fresh[i];
+        if (fresh[i] != 0 && fresh[i] * 4U >= total) {
+            out.surface[i] = static_cast<std::uint8_t>(SurfaceKind::fresh_water);
+        } else if (land[i] >= ocean[i]) {
+            out.surface[i] = static_cast<std::uint8_t>(SurfaceKind::land);
+        }
+    }
+
+    for (const Entity& entity : entities_) {
+        std::size_t x = 0;
+        std::size_t z = 0;
+        if (!habitat_.coordinates(entity.position, x, z)) {
+            continue;
+        }
+        const std::size_t i = (z / scale) * out.width + (x / scale);
+        switch (entity.kind) {
+        case EntityKind::plant:
+            ++out.plants[i];
+            break;
+        case EntityKind::herbivore:
+            ++out.herbivores[i];
+            break;
+        case EntityKind::omnivore:
+            ++out.omnivores[i];
+            break;
+        case EntityKind::carnivore:
+            ++out.carnivores[i];
+            break;
+        case EntityKind::insect:
+            ++out.insects[i];
+            break;
+        case EntityKind::generic:
+            break;
+        }
+    }
+    return out;
 }
 
 std::size_t World::entity_count(SpeciesId species_id) const noexcept {
