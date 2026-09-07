@@ -206,6 +206,7 @@ func _process(_delta: float) -> bool:
 		bee_fly
 	)
 	if not grounded_ok:
+		push_error("Grounded organisms are not sitting on the island surface.")
 		_view.free()
 		_world.free()
 		quit(1)
