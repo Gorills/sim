@@ -11,6 +11,7 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
+#include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 #include <numbers>
 
@@ -32,6 +33,15 @@ PackedByteArray to_packed_bytes(const std::vector<std::uint8_t>& values) {
     out.resize(static_cast<int64_t>(values.size()));
     for (std::size_t i = 0; i < values.size(); ++i) {
         out[static_cast<int64_t>(i)] = values[i];
+    }
+    return out;
+}
+
+PackedInt32Array to_packed_ints(const std::vector<std::uint32_t>& values) {
+    PackedInt32Array out;
+    out.resize(static_cast<int64_t>(values.size()));
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        out[static_cast<int64_t>(i)] = static_cast<std::int32_t>(values[i]);
     }
     return out;
 }
@@ -58,9 +68,16 @@ void SimWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_speed_scale", "speed_scale"), &SimWorld::set_speed_scale);
     ClassDB::bind_method(D_METHOD("get_tick_index"), &SimWorld::get_tick_index);
     ClassDB::bind_method(D_METHOD("get_entity_count"), &SimWorld::get_entity_count);
+    ClassDB::bind_method(D_METHOD("get_render_center"), &SimWorld::get_render_center);
+    ClassDB::bind_method(D_METHOD("set_render_center", "center"), &SimWorld::set_render_center);
+    ClassDB::bind_method(D_METHOD("get_render_radius"), &SimWorld::get_render_radius);
+    ClassDB::bind_method(D_METHOD("set_render_radius", "radius"), &SimWorld::set_render_radius);
+    ClassDB::bind_method(D_METHOD("refresh_render_interest"), &SimWorld::refresh_render_interest);
     ClassDB::bind_method(D_METHOD("get_render_snapshot"), &SimWorld::get_render_snapshot);
     ClassDB::bind_method(D_METHOD("get_sim_snapshot"), &SimWorld::get_sim_snapshot);
     ClassDB::bind_method(D_METHOD("get_habitat_grid"), &SimWorld::get_habitat_grid);
+    ClassDB::bind_method(D_METHOD("get_render_habitat_grid"), &SimWorld::get_render_habitat_grid);
+    ClassDB::bind_method(D_METHOD("get_world_overview", "resolution"), &SimWorld::get_world_overview);
     ClassDB::bind_method(D_METHOD("get_species_catalog"), &SimWorld::get_species_catalog);
     ClassDB::bind_method(D_METHOD("get_ecosystem_stats"), &SimWorld::get_ecosystem_stats);
     ClassDB::bind_method(D_METHOD("spawn_agent", "position", "velocity"), &SimWorld::spawn_agent);
@@ -73,6 +90,8 @@ void SimWorld::_bind_methods() {
                  "get_demo_agent_count");
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "island_mode"), "set_island_mode", "is_island_mode");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "speed_scale"), "set_speed_scale", "get_speed_scale");
+    ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "render_center"), "set_render_center", "get_render_center");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "render_radius"), "set_render_radius", "get_render_radius");
 
     ADD_SIGNAL(MethodInfo("ticked", PropertyInfo(Variant::INT, "tick")));
 }
@@ -82,7 +101,7 @@ void SimWorld::_ready() {
     set_process_priority(-100);
     ensure_world();
     seed_initial_world();
-    current_ = world_->snapshot();
+    current_ = world_->snapshot(render_center_, render_radius_);
     previous_ = current_;
 }
 
@@ -90,7 +109,7 @@ void SimWorld::_process(double delta) {
     ensure_world();
     if (world_->paused()) {
         world_->flush_commands();
-        current_ = world_->snapshot();
+        current_ = world_->snapshot(render_center_, render_radius_);
         previous_ = current_;
         return;
     }
@@ -99,7 +118,7 @@ void SimWorld::_process(double delta) {
     stepper_.advance(delta * speed_scale_, [this]() {
         previous_ = current_;
         world_->tick();
-        current_ = world_->snapshot();
+        current_ = world_->snapshot(render_center_, render_radius_);
         emit_signal("ticked", static_cast<int64_t>(world_->tick_index()));
     });
 }
@@ -175,13 +194,44 @@ int64_t SimWorld::get_entity_count() const {
     return world_ ? static_cast<int64_t>(world_->entity_count()) : 0;
 }
 
+void SimWorld::set_render_center(godot::Vector3 center) {
+    const sim::Vec3 value = sim_godot::from_godot(center);
+    if (!std::isfinite(value.x) || !std::isfinite(value.z)) {
+        return;
+    }
+    render_center_ = value;
+}
+
+godot::Vector3 SimWorld::get_render_center() const {
+    return sim_godot::to_godot(render_center_);
+}
+
+void SimWorld::set_render_radius(double radius) {
+    if (!std::isfinite(radius)) {
+        return;
+    }
+    render_radius_ = std::clamp(radius, 150.0, 5'000.0);
+}
+
+double SimWorld::get_render_radius() const {
+    return render_radius_;
+}
+
+void SimWorld::refresh_render_interest() {
+    if (!world_) {
+        return;
+    }
+    current_ = world_->snapshot(render_center_, render_radius_);
+    previous_ = current_;
+}
+
 godot::Ref<SimSnapshot> SimWorld::get_render_snapshot() const {
     const double alpha = world_ && world_->paused() ? 1.0 : stepper_.alpha();
     return make_snapshot(sim::interpolate(previous_, current_, alpha), alpha);
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_sim_snapshot() const {
-    return make_snapshot(current_, 1.0);
+    return world_ ? make_snapshot(world_->snapshot(), 1.0) : make_snapshot({}, 1.0);
 }
 
 godot::Ref<SimHabitatGrid> SimWorld::get_habitat_grid() const {
@@ -300,7 +350,7 @@ void SimWorld::reset_world() {
     current_ = {};
     demo_spawned_ = false;
     seed_initial_world();
-    current_ = world_->snapshot();
+    current_ = world_->snapshot(render_center_, render_radius_);
     previous_ = current_;
 }
 
