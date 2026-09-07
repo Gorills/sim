@@ -4,9 +4,9 @@ extends Node3D
 ## behavior lives in camera_controller.gd.
 
 const Actions = preload("res://scripts/input_actions.gd")
+const HUD_REFRESH_SEC := 0.5
 
 @onready var world_view: Node3D = $WorldView
-@onready var world_map_view: Node3D = $WorldMapView
 @onready var camera_controller: Node = $CameraController
 @onready var hud: Label = %Hud
 @onready var legend: RichTextLabel = %Legend
@@ -15,11 +15,11 @@ const Actions = preload("res://scripts/input_actions.gd")
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
 @onready var ocean: MeshInstance3D = $Ocean
-@onready var overview: Control = %WorldOverview
 
 var _sim: Node
 var _speed_scale := 1.0
 var _world_bounds := Rect2(Vector2(-9600.0, -9600.0), Vector2(19200.0, 19200.0))
+var _hud_clock := 999.0
 
 
 func _ready() -> void:
@@ -37,16 +37,16 @@ func _ready() -> void:
 	add_child(_sim)
 	move_child(_sim, 0)
 
+	# Bind the camera first so the first detailed snapshot is already scoped to
+	# the spectator's interest window.
+	_refresh_world_bounds()
+	camera_controller.call("bind_sim", _sim, _world_bounds)
+
 	if world_view.has_method("bind_sim"):
 		world_view.call("bind_sim", _sim)
-	if world_map_view.has_method("bind_sim"):
-		world_map_view.call("bind_sim", _sim)
-	if overview != null and overview.has_method("bind_sim"):
-		overview.call("bind_sim", _sim)
 
-	_refresh_world_bounds()
-	camera_controller.connect("view_mode_changed", _on_view_mode_changed)
-	camera_controller.call("bind_sim", _sim, _world_bounds)
+	view_badge.text = tr("UI_VIEW_GOD")
+	controls_hint.text = tr("HUD_CONTROLS_GOD")
 	_rebuild_legend()
 	print("SIM: entities=", _sim.call("get_entity_count"), " tick=", _sim.call("get_tick_index"))
 
@@ -63,9 +63,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_refresh_world_bounds()
 		camera_controller.call("set_world_bounds", _world_bounds)
 		camera_controller.call("reset_view")
-		if world_map_view.has_method("refresh_now"):
-			world_map_view.call("refresh_now")
 		_rebuild_legend()
+		_hud_clock = 999.0
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(Actions.SIM_SPEED_1):
 		_set_speed(1.0)
@@ -78,9 +77,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _sim == null:
 		return
+
+	_hud_clock += delta
+	if _hud_clock < HUD_REFRESH_SEC:
+		return
+	_hud_clock = 0.0
 
 	var stats: Dictionary = (
 		_sim.call("get_ecosystem_stats")
@@ -153,6 +157,8 @@ func _refresh_world_bounds() -> void:
 	if _sim == null or not _sim.has_method("get_world_overview"):
 		return
 
+	# One low-resolution metadata read at startup/reset only. No overview
+	# renderer or periodic whole-world aggregation remains in the scene.
 	var data: Dictionary = _sim.call("get_world_overview", 16)
 	var width := int(data.get("width", 0))
 	var height := int(data.get("height", 0))
@@ -165,28 +171,6 @@ func _refresh_world_bounds() -> void:
 	_world_bounds = Rect2(Vector2(origin.x, origin.z), world_size)
 	var ocean_scale := maxf(world_size.x, world_size.y) * 1.35 / 96.0
 	ocean.scale = Vector3(ocean_scale, 1.0, ocean_scale)
-
-
-func _on_view_mode_changed(overview_enabled: bool) -> void:
-	if world_view.has_method("set_detail_active"):
-		world_view.call("set_detail_active", not overview_enabled)
-	if world_map_view.has_method("set_active"):
-		world_map_view.call("set_active", overview_enabled)
-
-	ocean.visible = not overview_enabled
-	if world_environment.environment != null:
-		world_environment.environment.fog_enabled = not overview_enabled
-	if overview != null:
-		overview.visible = not overview_enabled
-	if legend != null and legend.get_parent() != null:
-		legend.get_parent().visible = not overview_enabled
-
-	view_badge.text = tr("UI_VIEW_MAP") if overview_enabled else tr("UI_VIEW_LOCAL")
-	controls_hint.text = (
-		tr("HUD_CONTROLS_MAP")
-		if overview_enabled
-		else tr("HUD_CONTROLS_LOCAL")
-	)
 
 
 func _update_daylight(hour: float) -> void:
