@@ -58,8 +58,12 @@ World::World(WorldConfig config, SpeciesCatalog species)
       random_state_(config_.seed == 0 ? 1 : config_.seed) {}
 
 EntityId World::enqueue_spawn(Vec3 position, Vec3 velocity) {
+    if (entities_.size() + queued_spawn_count_ >= config_.max_entities) {
+        return 0;
+    }
     const EntityId id = next_id_++;
     commands_.push_back(SpawnCommand{id, position, velocity});
+    ++queued_spawn_count_;
     return id;
 }
 
@@ -68,13 +72,14 @@ EntityId World::enqueue_organism(SpeciesId species_id,
                                  double energy,
                                  double age_hours) {
     if (species_.find(species_id) == nullptr ||
-        entities_.size() + commands_.size() >= config_.max_entities ||
+        entities_.size() + queued_spawn_count_ >= config_.max_entities ||
         !habitat_.is_land(position)) {
         return 0;
     }
     const EntityId id = next_id_++;
     commands_.push_back(
         SpawnOrganismCommand{id, species_id, position, energy, std::max(0.0, age_hours)});
+    ++queued_spawn_count_;
     return id;
 }
 
@@ -326,10 +331,12 @@ void World::apply_commands() {
         std::visit([this](const auto& cmd) { apply_one(cmd); }, command);
     }
     commands_.clear();
+    queued_spawn_count_ = 0;
 }
 
 void World::apply_one(const SpawnCommand& cmd) {
-    if (cmd.id == 0 || index_.contains(cmd.id)) {
+    if (cmd.id == 0 || index_.contains(cmd.id) ||
+        entities_.size() >= config_.max_entities) {
         return;
     }
     Entity entity;
@@ -730,7 +737,7 @@ void World::update_one_animal(std::size_t entity_index, double hours) {
 void World::reproduce(Entity& parent, const SpeciesDefinition& definition, double hours) {
     if (parent.age_hours < definition.maturity_hours ||
         parent.reproduction_cooldown_hours > 0.0 ||
-        commands_.size() + entities_.size() >= config_.max_entities) {
+        queued_spawn_count_ + entities_.size() >= config_.max_entities) {
         return;
     }
 
