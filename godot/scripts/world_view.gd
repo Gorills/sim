@@ -774,14 +774,9 @@ func _sync_terrain3d_regions(
 			continue
 		var existing: Variant = data.call("get_region", key)
 		if existing != null:
-			data.call("set_region_deleted", key, false)
+			data.call("add_region", existing, false)
 		else:
-			var region_center := Vector3(
-				(float(key.x) + 0.5) * region_world_size,
-				0.0,
-				(float(key.y) + 0.5) * region_world_size
-			)
-			data.call("add_region_blankp", region_center, false)
+			data.call("add_region_blank", key, false)
 
 	_terrain3d_region_keys = wanted
 
