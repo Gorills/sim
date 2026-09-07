@@ -637,11 +637,18 @@ func _build_fresh_water_mesh(habitat: Object) -> void:
 			var z0 := origin.z + float(z) * cell_size
 			var x1 := x0 + cell_size
 			var z1 := z0 + cell_size
+			var stride := width + 1
+			var water_y := (
+				_terrain_heights[z * stride + x]
+				+ _terrain_heights[(z + 1) * stride + x]
+				+ _terrain_heights[(z + 1) * stride + x + 1]
+				+ _terrain_heights[z * stride + x + 1]
+			) * 0.25 + 0.18
 			for point in [
-				Vector3(x0, 0.028, z0),
-				Vector3(x0, 0.028, z1),
-				Vector3(x1, 0.028, z1),
-				Vector3(x1, 0.028, z0),
+				Vector3(x0, water_y, z0),
+				Vector3(x0, water_y, z1),
+				Vector3(x1, water_y, z1),
+				Vector3(x1, water_y, z0),
 			]:
 				st.set_color(fresh_color)
 				st.add_vertex(point)
