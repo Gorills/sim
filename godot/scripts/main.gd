@@ -174,6 +174,8 @@ func _on_view_mode_changed(overview_enabled: bool) -> void:
 		world_map_view.call("set_active", overview_enabled)
 
 	ocean.visible = not overview_enabled
+	if world_environment.environment != null:
+		world_environment.environment.fog_enabled = not overview_enabled
 	if overview != null:
 		overview.visible = not overview_enabled
 	if legend != null and legend.get_parent() != null:
