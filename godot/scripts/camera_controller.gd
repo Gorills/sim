@@ -7,7 +7,7 @@ const Actions = preload("res://scripts/input_actions.gd")
 
 const DEFAULT_ALTITUDE := 650.0
 const MIN_ALTITUDE := 24.0
-const MAX_ALTITUDE := 2600.0
+const MAX_ALTITUDE := 1100.0
 const DEFAULT_PITCH := deg_to_rad(-38.0)
 const MIN_PITCH := deg_to_rad(-88.0)
 const MAX_PITCH := deg_to_rad(82.0)
@@ -21,6 +21,7 @@ const LOOK_SPEED := 1.75
 const MOUSE_LOOK_SENSITIVITY := 0.0038
 const RENDER_RADIUS := 1200.0
 const STREAM_SHIFT_THRESHOLD := 550.0
+const STREAM_LOOK_AHEAD := 350.0
 const CAMERA_FAR := 4200.0
 const SHADOW_DISTANCE := 1800.0
 
@@ -200,7 +201,16 @@ func _sync_render_interest(force: bool) -> void:
 	if _sim == null:
 		return
 
-	var center := Vector3(_position.x, 0.0, _position.z)
+	var forward := _look_direction()
+	forward.y = 0.0
+	if forward.length_squared() > 0.0001:
+		forward = forward.normalized()
+	var center := Vector3(
+		_position.x + forward.x * STREAM_LOOK_AHEAD,
+		0.0,
+		_position.z + forward.z * STREAM_LOOK_AHEAD
+	)
+	center = _clamp_interest_center(center)
 	var moved_far_enough := (
 		_last_stream_center == Vector3.INF
 		or center.distance_squared_to(_last_stream_center)
@@ -221,6 +231,13 @@ func _clamp_position(position: Vector3) -> Vector3:
 	position.z = clampf(position.z, _world_bounds.position.y, _world_bounds.end.y)
 	position.y = clampf(position.y, MIN_ALTITUDE, MAX_ALTITUDE)
 	return position
+
+
+func _clamp_interest_center(center: Vector3) -> Vector3:
+	center.x = clampf(center.x, _world_bounds.position.x, _world_bounds.end.x)
+	center.z = clampf(center.z, _world_bounds.position.y, _world_bounds.end.y)
+	center.y = 0.0
+	return center
 
 
 func _camera_input_allowed() -> bool:
