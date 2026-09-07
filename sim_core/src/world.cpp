@@ -55,6 +55,8 @@ World::World(WorldConfig config, SpeciesCatalog species)
     : config_(normalize_config(config)),
       species_(std::move(species)),
       habitat_(config_.habitat),
+      simulation_lod_grid_(config_.bounds_min, config_.bounds_max, config_.simulation_lod),
+      simulation_lod_enabled_(config_.simulation_lod_enabled),
       random_state_(config_.seed == 0 ? 1 : config_.seed) {}
 
 EntityId World::enqueue_spawn(Vec3 position, Vec3 velocity) {
@@ -125,6 +127,31 @@ void World::set_ecology_hours_per_tick(double hours) {
         return;
     }
     config_.ecology_hours_per_tick = hours;
+}
+
+void World::configure_simulation_lod(SimulationLodConfig config,
+                                     Vec3 observer,
+                                     bool enabled) {
+    config_.simulation_lod = config;
+    config_.simulation_lod_enabled = enabled;
+    simulation_lod_grid_ = SimulationLodGrid(config_.bounds_min, config_.bounds_max, config);
+    simulation_observer_ = observer;
+    simulation_lod_enabled_ = enabled;
+}
+
+void World::set_simulation_observer(Vec3 observer) noexcept {
+    if (std::isfinite(observer.x) && std::isfinite(observer.z)) {
+        simulation_observer_ = observer;
+    }
+}
+
+void World::set_simulation_lod_enabled(bool enabled) noexcept {
+    simulation_lod_enabled_ = enabled;
+    config_.simulation_lod_enabled = enabled;
+}
+
+SimulationLodSummary World::simulation_lod_summary() const {
+    return simulation_lod_grid_.summary(simulation_observer_, tick_index_ + 1);
 }
 
 double World::absolute_hours() const noexcept {
@@ -530,6 +557,7 @@ void World::apply_one(const SpawnCommand& cmd) {
     entity.velocity = cmd.velocity;
     entity.home_position = cmd.position;
     entity.movement_target = cmd.position;
+    entity.last_ecology_tick = tick_index_;
     index_.emplace(cmd.id, entities_.size());
     entities_.push_back(entity);
 }
@@ -559,6 +587,7 @@ void World::apply_one(const SpawnOrganismCommand& cmd) {
     entity.reproduction_cooldown_hours = definition->reproduction_interval_hours * random_unit();
     entity.behavior_timer_hours =
         is_animal(definition->kind) ? definition->rest_duration_hours * random_unit() : 0.0;
+    entity.last_ecology_tick = tick_index_;
     index_.emplace(cmd.id, entities_.size());
     entities_.push_back(entity);
     ++species_counts_[definition->id];
@@ -573,11 +602,14 @@ void World::apply_one(const DespawnCommand& cmd) {
 }
 
 void World::integrate() {
+    simulation_work_stats_ = {};
+    simulation_work_stats_.tick = tick_index_ + 1;
+
     habitat_.advance(config_.ecology_hours_per_tick, absolute_hours(), config_.climate);
     update_canopy_and_light();
-    update_plants(config_.ecology_hours_per_tick);
+    update_plants();
     rebuild_spatial_index();
-    update_animals(config_.ecology_hours_per_tick);
+    update_animals();
     remove_dead();
 
     const double dt = config_.tick_dt;
@@ -609,11 +641,16 @@ void World::update_canopy_and_light() {
     habitat_.finalize_light();
 }
 
-void World::update_plants(double hours) {
+void World::update_plants() {
     for (Entity& entity : entities_) {
         if (entity.kind != EntityKind::plant) {
             continue;
         }
+        const std::optional<double> scheduled_hours = scheduled_ecology_hours(entity);
+        if (!scheduled_hours.has_value()) {
+            continue;
+        }
+        const double hours = *scheduled_hours;
         const SpeciesDefinition* definition = species_.find(entity.species_id);
         HabitatCell* cell = habitat_.cell_at(entity.position);
         if (definition == nullptr || cell == nullptr || cell->water) {
@@ -670,12 +707,63 @@ void World::update_plants(double hours) {
     }
 }
 
-void World::update_animals(double hours) {
+void World::update_animals() {
     const std::size_t count = entities_.size();
     for (std::size_t i = 0; i < count; ++i) {
-        if (is_animal(entities_[i].kind)) {
-            update_one_animal(i, hours);
+        if (!is_animal(entities_[i].kind)) {
+            continue;
         }
+        const std::optional<double> scheduled_hours = scheduled_ecology_hours(entities_[i]);
+        if (!scheduled_hours.has_value()) {
+            continue;
+        }
+        update_one_animal(i, *scheduled_hours);
+    }
+}
+
+std::optional<double> World::scheduled_ecology_hours(Entity& entity) {
+    const std::uint64_t step = tick_index_ + 1;
+    SimulationLod lod = SimulationLod::individual;
+    bool due = true;
+
+    if (simulation_lod_enabled_) {
+        const RegionCoord coord = simulation_lod_grid_.region_at(entity.position);
+        lod = simulation_lod_grid_.lod_for(coord, simulation_observer_);
+        due = simulation_lod_grid_.due(coord, lod, step);
+    }
+
+    if (!due) {
+        record_lod_entity(lod, false, 0.0);
+        return std::nullopt;
+    }
+
+    const std::uint64_t last = std::min(entity.last_ecology_tick, step);
+    const std::uint64_t elapsed_steps = std::max<std::uint64_t>(1, step - last);
+    const double hours = config_.ecology_hours_per_tick * static_cast<double>(elapsed_steps);
+    entity.last_ecology_tick = step;
+    record_lod_entity(lod, true, hours);
+    return hours;
+}
+
+void World::record_lod_entity(SimulationLod lod, bool updated, double catchup_hours) {
+    ++simulation_work_stats_.organism_entities;
+    switch (lod) {
+    case SimulationLod::individual:
+        ++simulation_work_stats_.individual_entities;
+        break;
+    case SimulationLod::cohort:
+        ++simulation_work_stats_.cohort_entities;
+        break;
+    case SimulationLod::aggregate:
+        ++simulation_work_stats_.aggregate_entities;
+        break;
+    }
+    if (updated) {
+        ++simulation_work_stats_.updated_entities;
+        simulation_work_stats_.max_catchup_hours =
+            std::max(simulation_work_stats_.max_catchup_hours, catchup_hours);
+    } else {
+        ++simulation_work_stats_.deferred_entities;
     }
 }
 
