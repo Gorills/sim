@@ -1,22 +1,26 @@
 class_name SimInputActions
 extends RefCounted
 
-## Semantic input contract shared by the visualizer. Bindings live in project.godot;
-## gameplay/presentation code depends only on these action names.
+## Semantic input contract shared by the visualizer. Physical bindings live in
+## project.godot; camera/presentation code depends only on these action names.
 
 const CAMERA_MOVE_LEFT: StringName = &"camera_move_left"
 const CAMERA_MOVE_RIGHT: StringName = &"camera_move_right"
 const CAMERA_MOVE_FORWARD: StringName = &"camera_move_forward"
 const CAMERA_MOVE_BACK: StringName = &"camera_move_back"
-const CAMERA_ORBIT_LEFT: StringName = &"camera_orbit_left"
-const CAMERA_ORBIT_RIGHT: StringName = &"camera_orbit_right"
-const CAMERA_ORBIT_UP: StringName = &"camera_orbit_up"
-const CAMERA_ORBIT_DOWN: StringName = &"camera_orbit_down"
-const CAMERA_ZOOM_IN: StringName = &"camera_zoom_in"
-const CAMERA_ZOOM_OUT: StringName = &"camera_zoom_out"
-const CAMERA_ORBIT_DRAG: StringName = &"camera_orbit_drag"
-const CAMERA_PAN_DRAG: StringName = &"camera_pan_drag"
-const VIEW_TOGGLE_OVERVIEW: StringName = &"view_toggle_overview"
+const CAMERA_MOVE_UP: StringName = &"camera_move_up"
+const CAMERA_MOVE_DOWN: StringName = &"camera_move_down"
+
+const CAMERA_LOOK_LEFT: StringName = &"camera_look_left"
+const CAMERA_LOOK_RIGHT: StringName = &"camera_look_right"
+const CAMERA_LOOK_UP: StringName = &"camera_look_up"
+const CAMERA_LOOK_DOWN: StringName = &"camera_look_down"
+const CAMERA_LOOK_DRAG: StringName = &"camera_look_drag"
+
+const CAMERA_SPEED_INCREASE: StringName = &"camera_speed_increase"
+const CAMERA_SPEED_DECREASE: StringName = &"camera_speed_decrease"
+const CAMERA_SPEED_BOOST: StringName = &"camera_speed_boost"
+
 const SIM_TOGGLE_PAUSE: StringName = &"sim_toggle_pause"
 const SIM_RESET: StringName = &"sim_reset"
 const SIM_SPEED_1: StringName = &"sim_speed_1"
@@ -30,15 +34,16 @@ static func required_actions() -> PackedStringArray:
 		CAMERA_MOVE_RIGHT,
 		CAMERA_MOVE_FORWARD,
 		CAMERA_MOVE_BACK,
-		CAMERA_ORBIT_LEFT,
-		CAMERA_ORBIT_RIGHT,
-		CAMERA_ORBIT_UP,
-		CAMERA_ORBIT_DOWN,
-		CAMERA_ZOOM_IN,
-		CAMERA_ZOOM_OUT,
-		CAMERA_ORBIT_DRAG,
-		CAMERA_PAN_DRAG,
-		VIEW_TOGGLE_OVERVIEW,
+		CAMERA_MOVE_UP,
+		CAMERA_MOVE_DOWN,
+		CAMERA_LOOK_LEFT,
+		CAMERA_LOOK_RIGHT,
+		CAMERA_LOOK_UP,
+		CAMERA_LOOK_DOWN,
+		CAMERA_LOOK_DRAG,
+		CAMERA_SPEED_INCREASE,
+		CAMERA_SPEED_DECREASE,
+		CAMERA_SPEED_BOOST,
 		SIM_TOGGLE_PAUSE,
 		SIM_RESET,
 		SIM_SPEED_1,
