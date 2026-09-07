@@ -478,7 +478,7 @@ void SimWorld::seed_initial_world(sim::World& world) {
     if (island_mode_) {
         sim::IslandScenarioConfig scenario;
         scenario.seed = config_.seed;
-        static_cast<void>(sim::seed_temate_island(world, scenario));
+        static_cast<void>(sim::seed_temperate_island(world, scenario));
         return;
     }
     spawn_demo_agents(world);
