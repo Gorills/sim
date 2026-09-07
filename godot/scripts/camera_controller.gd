@@ -218,8 +218,7 @@ func _apply_camera() -> void:
 	_camera.near = 0.10
 	_camera.far = CAMERA_FAR
 	_camera.fov = 68.0
-	_camera.position = camera_position
-	_camera.look_at(focus, Vector3.UP)
+	_camera.look_at_from_position(camera_position, focus, Vector3.UP)
 
 	if _avatar != null:
 		_avatar.position = _anchor_position
