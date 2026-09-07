@@ -81,13 +81,22 @@ loop execute catch-up ticks.
 
 The core also owns a fixed simulation-region grid and a phased LOD scheduler.
 The default 600 m regions are classified as individual, cohort, or aggregate
-around the simulation observer, with lower-frequency regions distributed across
-tick phases to avoid synchronized work spikes. This change establishes the
-scheduler and published LOD contract only: the current ecological equations
-still use the existing individual `World::tick()` representation. Cohort and
-aggregate state, conservation-preserving promotion/demotion, and LOD-specific
-ecology updates are the next simulation-core layer; they must not be inferred
-from the scheduler alone.
+around the simulation observer. Organisms in individual regions run every
+ecology tick, cohort regions every 4 ticks, and aggregate regions every 20
+ticks. Lower-frequency regions are phase-shifted so their work is distributed
+instead of forming one synchronized spike.
+
+This is real temporal simulation LOD: every organism stores the last ecology
+tick applied to it. A deferred organism receives the full accumulated simulated
+interval on its next scheduled update. Promotion to a higher-detail region also
+catches up the elapsed interval immediately, so moving the observer cannot erase
+world time. `get_simulation_lod_stats()` exposes actual updated/deferred entity
+counts and maximum catch-up interval, not only region classification.
+
+The representation is still individual at this stage. Cohort/aggregate
+population state and conservation-preserving materialization/dematerialization
+are the next simulation-core layer. Temporal LOD reduces update work now without
+pretending that individual storage already has whole-world asymptotics.
 
 ## Debug minimap
 
@@ -128,6 +137,7 @@ semantic actions from `godot/scripts/input_actions.gd`.
 - semantic KBM/gamepad bindings and localization;
 - immutable render snapshot/alpha/generation bridge used by the async runtime;
 - simulation LOD region accounting (individual + cohort + aggregate = total);
+- simulation LOD work telemetry for updated/deferred organisms and catch-up time;
 - 20 Hz simulation timing with the one-simulated-minute-per-real-second 1x rate;
 - an inhabited land spawn from the aggregated overview;
 - perspective third-person camera distance near 7 m;
