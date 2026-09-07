@@ -48,6 +48,19 @@ struct HabitatSnapshot {
     std::vector<std::uint8_t> surface{};
 };
 
+struct OverviewSnapshot {
+    std::size_t width = 0;
+    std::size_t height = 0;
+    double cell_size = 1.0;
+    Vec3 origin{};
+    std::vector<std::uint8_t> surface{};
+    std::vector<std::uint32_t> plants{};
+    std::vector<std::uint32_t> herbivores{};
+    std::vector<std::uint32_t> omnivores{};
+    std::vector<std::uint32_t> carnivores{};
+    std::vector<std::uint32_t> insects{};
+};
+
 struct Snapshot {
     std::uint64_t tick = 0;
     double tick_dt = 0.0;
