@@ -6,14 +6,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <numbers>
 #include <string>
+#include <utility>
 #include <vector>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
-#include <numbers>
 
 using namespace godot;
 
@@ -53,9 +54,13 @@ PackedInt32Array to_packed_ints(const std::vector<std::uint32_t>& values) {
 } // namespace
 
 SimWorld::SimWorld() {
-    // Ecology can run below render FPS while preserving simulated time per real
-    // second. Faster observation remains available through speed_scale.
     config_.ecology_hours_per_tick = config_.tick_dt * kEcologyHoursPerRealSecond;
+}
+
+SimWorld::~SimWorld() {
+    if (runtime_) {
+        runtime_->stop();
+    }
 }
 
 void SimWorld::_bind_methods() {
@@ -79,6 +84,7 @@ void SimWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_render_radius"), &SimWorld::get_render_radius);
     ClassDB::bind_method(D_METHOD("set_render_radius", "radius"), &SimWorld::set_render_radius);
     ClassDB::bind_method(D_METHOD("refresh_render_interest"), &SimWorld::refresh_render_interest);
+    ClassDB::bind_method(D_METHOD("get_render_generation"), &SimWorld::get_render_generation);
     ClassDB::bind_method(D_METHOD("get_render_snapshot"), &SimWorld::get_render_snapshot);
     ClassDB::bind_method(D_METHOD("get_current_render_snapshot"),
                          &SimWorld::get_current_render_snapshot);
@@ -89,6 +95,8 @@ void SimWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_world_overview", "resolution"), &SimWorld::get_world_overview);
     ClassDB::bind_method(D_METHOD("get_species_catalog"), &SimWorld::get_species_catalog);
     ClassDB::bind_method(D_METHOD("get_ecosystem_stats"), &SimWorld::get_ecosystem_stats);
+    ClassDB::bind_method(D_METHOD("get_simulation_lod_stats"),
+                         &SimWorld::get_simulation_lod_stats);
     ClassDB::bind_method(D_METHOD("spawn_agent", "position", "velocity"), &SimWorld::spawn_agent);
     ClassDB::bind_method(D_METHOD("despawn", "id"), &SimWorld::despawn);
     ClassDB::bind_method(D_METHOD("reset_world"), &SimWorld::reset_world);
@@ -99,8 +107,10 @@ void SimWorld::_bind_methods() {
                  "get_demo_agent_count");
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "island_mode"), "set_island_mode", "is_island_mode");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "speed_scale"), "set_speed_scale", "get_speed_scale");
-    ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "render_center"), "set_render_center", "get_render_center");
-    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "render_radius"), "set_render_radius", "get_render_radius");
+    ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "render_center"), "set_render_center",
+                 "get_render_center");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "render_radius"), "set_render_radius",
+                 "get_render_radius");
 
     ADD_SIGNAL(MethodInfo("ticked", PropertyInfo(Variant::INT, "tick")));
 }
@@ -108,28 +118,16 @@ void SimWorld::_bind_methods() {
 void SimWorld::_ready() {
     set_process(true);
     set_process_priority(-100);
-    ensure_world();
-    seed_initial_world();
-    current_ = world_->snapshot(render_center_, render_radius_);
-    previous_ = current_;
+    ensure_runtime();
 }
 
 void SimWorld::_process(double delta) {
-    ensure_world();
-    if (world_->paused()) {
-        world_->flush_commands();
-        current_ = world_->snapshot(render_center_, render_radius_);
-        previous_ = current_;
-        return;
+    static_cast<void>(delta);
+    const int64_t tick = get_tick_index();
+    if (tick != last_emitted_tick_) {
+        last_emitted_tick_ = tick;
+        emit_signal("ticked", tick);
     }
-
-    sync_stepper_budget();
-    stepper_.advance(delta * speed_scale_, [this]() {
-        previous_ = current_;
-        world_->tick();
-        current_ = world_->snapshot(render_center_, render_radius_);
-        emit_signal("ticked", static_cast<int64_t>(world_->tick_index()));
-    });
 }
 
 void SimWorld::set_tick_hz(double hz) {
@@ -139,10 +137,8 @@ void SimWorld::set_tick_hz(double hz) {
     const double clamped = std::clamp(hz, 1.0, 1000.0);
     config_.tick_dt = 1.0 / clamped;
     config_.ecology_hours_per_tick = config_.tick_dt * kEcologyHoursPerRealSecond;
-    stepper_.set_tick_dt(config_.tick_dt);
-    if (world_) {
-        world_->set_tick_dt(config_.tick_dt);
-        world_->set_ecology_hours_per_tick(config_.ecology_hours_per_tick);
+    if (runtime_) {
+        runtime_->request_timing(config_.tick_dt, config_.ecology_hours_per_tick);
     }
 }
 
@@ -155,12 +151,14 @@ double SimWorld::get_ecology_hours_per_tick() const {
 }
 
 void SimWorld::set_paused(bool paused) {
-    ensure_world();
-    world_->set_paused(paused);
+    paused_ = paused;
+    if (runtime_) {
+        runtime_->request_paused(paused);
+    }
 }
 
 bool SimWorld::is_paused() const {
-    return world_ ? world_->paused() : false;
+    return paused_;
 }
 
 void SimWorld::set_demo_agent_count(int32_t count) {
@@ -184,29 +182,27 @@ void SimWorld::set_speed_scale(double speed_scale) {
         return;
     }
     speed_scale_ = std::clamp(speed_scale, 0.0, 64.0);
-    sync_stepper_budget();
-}
-
-int SimWorld::stepper_max_steps() const {
-    const int requested = static_cast<int>(std::ceil(speed_scale_)) + 8;
-    return std::clamp(requested, 8, 64);
-}
-
-void SimWorld::sync_stepper_budget() {
-    stepper_.set_tick_dt(config_.tick_dt);
-    stepper_.set_max_steps(stepper_max_steps());
+    if (runtime_) {
+        runtime_->request_speed_scale(speed_scale_);
+    }
 }
 
 double SimWorld::get_speed_scale() const {
     return speed_scale_;
 }
 
+std::shared_ptr<const sim::RuntimeFrame> SimWorld::published_frame() const {
+    return runtime_ ? runtime_->frame() : std::shared_ptr<const sim::RuntimeFrame>{};
+}
+
 int64_t SimWorld::get_tick_index() const {
-    return world_ ? static_cast<int64_t>(world_->tick_index()) : 0;
+    const auto frame = published_frame();
+    return frame ? static_cast<int64_t>(frame->tick) : 0;
 }
 
 int64_t SimWorld::get_entity_count() const {
-    return world_ ? static_cast<int64_t>(world_->entity_count()) : 0;
+    const auto frame = published_frame();
+    return frame ? static_cast<int64_t>(frame->entity_count) : 0;
 }
 
 void SimWorld::set_render_center(godot::Vector3 center) {
@@ -233,84 +229,90 @@ double SimWorld::get_render_radius() const {
 }
 
 void SimWorld::refresh_render_interest() {
-    if (!world_) {
-        return;
+    if (runtime_) {
+        runtime_->request_render_interest(render_center_, render_radius_, true);
     }
-    current_ = world_->snapshot(render_center_, render_radius_);
-    previous_ = current_;
+}
+
+int64_t SimWorld::get_render_generation() const {
+    const auto frame = published_frame();
+    return frame ? static_cast<int64_t>(frame->render_generation) : 0;
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_render_snapshot() const {
+    const auto frame = published_frame();
+    if (!frame || !frame->current_render) {
+        return make_snapshot({}, 1.0);
+    }
     const double alpha = get_render_alpha();
-    return make_snapshot(sim::interpolate(previous_, current_, alpha), alpha);
+    if (!frame->previous_render) {
+        return make_snapshot(*frame->current_render, alpha);
+    }
+    return make_snapshot(sim::interpolate(*frame->previous_render, *frame->current_render, alpha),
+                         alpha);
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_current_render_snapshot() const {
-    return make_snapshot(current_, 1.0);
+    const auto frame = published_frame();
+    return frame && frame->current_render ? make_snapshot(*frame->current_render, 1.0)
+                                          : make_snapshot({}, 1.0);
 }
 
 double SimWorld::get_render_alpha() const {
-    return world_ && world_->paused() ? 1.0 : stepper_.alpha();
+    return runtime_ ? runtime_->render_alpha() : 1.0;
 }
 
 godot::Ref<SimSnapshot> SimWorld::get_sim_snapshot() const {
-    return world_ ? make_snapshot(world_->snapshot(), 1.0) : make_snapshot({}, 1.0);
+    const auto frame = published_frame();
+    return frame && frame->full_snapshot ? make_snapshot(*frame->full_snapshot, 1.0)
+                                         : make_snapshot({}, 1.0);
+}
+
+godot::Ref<SimHabitatGrid> SimWorld::make_habitat(const sim::HabitatSnapshot& habitat) const {
+    godot::Ref<SimHabitatGrid> out;
+    out.instantiate();
+    out->set_width(static_cast<int32_t>(habitat.width));
+    out->set_height(static_cast<int32_t>(habitat.height));
+    out->set_cell_size(habitat.cell_size);
+    out->set_origin(sim_godot::to_godot(habitat.origin));
+    out->set_elevation(to_packed_floats(habitat.elevation));
+    out->set_moisture(to_packed_floats(habitat.moisture));
+    out->set_nutrients(to_packed_floats(habitat.nutrients));
+    out->set_temperature(to_packed_floats(habitat.temperature));
+    out->set_canopy(to_packed_floats(habitat.canopy));
+    out->set_light(to_packed_floats(habitat.light));
+    out->set_organic(to_packed_floats(habitat.organic));
+    out->set_pollination(to_packed_floats(habitat.pollination));
+    out->set_surface(to_packed_bytes(habitat.surface));
+    return out;
 }
 
 godot::Ref<SimHabitatGrid> SimWorld::get_habitat_grid() const {
-    godot::Ref<SimHabitatGrid> out;
-    out.instantiate();
-    if (!world_) {
-        return out;
-    }
-    const sim::HabitatSnapshot habitat = world_->habitat_snapshot();
-    out->set_width(static_cast<int32_t>(habitat.width));
-    out->set_height(static_cast<int32_t>(habitat.height));
-    out->set_cell_size(habitat.cell_size);
-    out->set_origin(sim_godot::to_godot(habitat.origin));
-    out->set_elevation(to_packed_floats(habitat.elevation));
-    out->set_moisture(to_packed_floats(habitat.moisture));
-    out->set_nutrients(to_packed_floats(habitat.nutrients));
-    out->set_temperature(to_packed_floats(habitat.temperature));
-    out->set_canopy(to_packed_floats(habitat.canopy));
-    out->set_light(to_packed_floats(habitat.light));
-    out->set_organic(to_packed_floats(habitat.organic));
-    out->set_pollination(to_packed_floats(habitat.pollination));
-    out->set_surface(to_packed_bytes(habitat.surface));
-    return out;
+    const auto frame = published_frame();
+    return frame && frame->full_habitat ? make_habitat(*frame->full_habitat)
+                                        : make_habitat({});
 }
 
 godot::Ref<SimHabitatGrid> SimWorld::get_render_habitat_grid() const {
-    godot::Ref<SimHabitatGrid> out;
-    out.instantiate();
-    if (!world_) {
-        return out;
-    }
-    const sim::HabitatSnapshot habitat =
-        world_->habitat_snapshot(render_center_, render_radius_ * 1.15);
-    out->set_width(static_cast<int32_t>(habitat.width));
-    out->set_height(static_cast<int32_t>(habitat.height));
-    out->set_cell_size(habitat.cell_size);
-    out->set_origin(sim_godot::to_godot(habitat.origin));
-    out->set_elevation(to_packed_floats(habitat.elevation));
-    out->set_moisture(to_packed_floats(habitat.moisture));
-    out->set_nutrients(to_packed_floats(habitat.nutrients));
-    out->set_temperature(to_packed_floats(habitat.temperature));
-    out->set_canopy(to_packed_floats(habitat.canopy));
-    out->set_light(to_packed_floats(habitat.light));
-    out->set_organic(to_packed_floats(habitat.organic));
-    out->set_pollination(to_packed_floats(habitat.pollination));
-    out->set_surface(to_packed_bytes(habitat.surface));
-    return out;
+    const auto frame = published_frame();
+    return frame && frame->render_habitat ? make_habitat(*frame->render_habitat)
+                                          : make_habitat({});
 }
 
 godot::Dictionary SimWorld::get_world_overview(int32_t resolution) const {
     Dictionary out;
-    if (!world_) {
+    if (!runtime_) {
         return out;
     }
-    const sim::OverviewSnapshot overview =
-        world_->overview_snapshot(static_cast<std::size_t>(std::clamp(resolution, 16, 256)));
+
+    runtime_->request_overview_resolution(
+        static_cast<std::size_t>(std::clamp(resolution, 16, 256)));
+    const auto frame = published_frame();
+    if (!frame || !frame->overview) {
+        return out;
+    }
+
+    const sim::OverviewSnapshot& overview = *frame->overview;
     out["width"] = static_cast<int64_t>(overview.width);
     out["height"] = static_cast<int64_t>(overview.height);
     out["cell_size"] = overview.cell_size;
@@ -328,10 +330,7 @@ godot::Dictionary SimWorld::get_world_overview(int32_t resolution) const {
 
 godot::Array SimWorld::get_species_catalog() const {
     Array out;
-    if (!world_) {
-        return out;
-    }
-    for (const sim::SpeciesDefinition& definition : world_->species().all()) {
+    for (const sim::SpeciesDefinition& definition : species_catalog_) {
         Dictionary entry;
         entry["id"] = static_cast<int64_t>(definition.id);
         entry["key"] = String(definition.key.c_str());
@@ -350,16 +349,27 @@ godot::Array SimWorld::get_species_catalog() const {
     return out;
 }
 
+const sim::SpeciesDefinition* SimWorld::find_species(sim::SpeciesId id) const {
+    for (const sim::SpeciesDefinition& definition : species_catalog_) {
+        if (definition.id == id) {
+            return &definition;
+        }
+    }
+    return nullptr;
+}
+
 godot::Dictionary SimWorld::get_ecosystem_stats() const {
     Dictionary out;
-    if (!world_) {
+    const auto frame = published_frame();
+    if (!frame || !frame->stats) {
         return out;
     }
-    const sim::EcosystemStats stats = world_->ecosystem_stats();
-    out["tick"] = static_cast<int64_t>(world_->tick_index());
-    out["entity_count"] = static_cast<int64_t>(world_->entity_count());
-    out["hour_of_day"] = world_->hour_of_day();
-    out["paused"] = world_->paused();
+
+    const sim::EcosystemStats& stats = *frame->stats;
+    out["tick"] = static_cast<int64_t>(frame->tick);
+    out["entity_count"] = static_cast<int64_t>(frame->entity_count);
+    out["hour_of_day"] = frame->hour_of_day;
+    out["paused"] = paused_;
     out["simulated_hours"] = stats.simulated_hours;
     out["year_phase"] = stats.year_phase;
     out["mean_moisture"] = stats.mean_moisture;
@@ -385,9 +395,10 @@ godot::Dictionary SimWorld::get_ecosystem_stats() const {
     out["feeding"] = static_cast<int64_t>(stats.feeding);
     out["drinking"] = static_cast<int64_t>(stats.drinking);
     out["fleeing"] = static_cast<int64_t>(stats.fleeing);
+
     Dictionary populations;
     for (const sim::SpeciesPopulation& population : stats.populations) {
-        const sim::SpeciesDefinition* definition = world_->species().find(population.species_id);
+        const sim::SpeciesDefinition* definition = find_species(population.species_id);
         if (definition == nullptr) {
             continue;
         }
@@ -397,65 +408,94 @@ godot::Dictionary SimWorld::get_ecosystem_stats() const {
     return out;
 }
 
+godot::Dictionary SimWorld::get_simulation_lod_stats() const {
+    Dictionary out;
+    const auto frame = published_frame();
+    if (!frame) {
+        return out;
+    }
+    const sim::SimulationLodSummary& lod = frame->lod_summary;
+    out["total_regions"] = static_cast<int64_t>(lod.total_regions);
+    out["individual_regions"] = static_cast<int64_t>(lod.individual_regions);
+    out["cohort_regions"] = static_cast<int64_t>(lod.cohort_regions);
+    out["aggregate_regions"] = static_cast<int64_t>(lod.aggregate_regions);
+    out["due_regions"] = static_cast<int64_t>(lod.due_regions);
+    return out;
+}
+
 int64_t SimWorld::spawn_agent(godot::Vector3 position, godot::Vector3 velocity) {
-    ensure_world();
+    ensure_runtime();
+    if (!runtime_) {
+        return 0;
+    }
     const sim::EntityId id =
-        world_->enqueue_spawn(sim_godot::from_godot(position), sim_godot::from_godot(velocity));
+        runtime_->enqueue_spawn(sim_godot::from_godot(position), sim_godot::from_godot(velocity));
     return static_cast<int64_t>(id);
 }
 
 bool SimWorld::despawn(int64_t id) {
-    if (id <= 0 || !world_) {
+    if (id <= 0 || !runtime_) {
         return false;
     }
-    world_->enqueue_despawn(static_cast<sim::EntityId>(id));
+    runtime_->request_despawn(static_cast<sim::EntityId>(id));
     return true;
 }
 
 void SimWorld::reset_world() {
-    world_ = std::make_unique<sim::World>(config_);
-    stepper_ = sim::Stepper(config_.tick_dt, stepper_max_steps());
-    previous_ = {};
-    current_ = {};
-    demo_spawned_ = false;
-    seed_initial_world();
-    current_ = world_->snapshot(render_center_, render_radius_);
-    previous_ = current_;
+    if (runtime_) {
+        runtime_->stop();
+        runtime_.reset();
+    }
+
+    std::unique_ptr<sim::World> world = create_seeded_world();
+    species_catalog_ = world->species().all();
+    world->set_paused(paused_);
+
+    sim::RuntimeOptions options;
+    options.speed_scale = speed_scale_;
+    options.render_center = render_center_;
+    options.render_radius = render_radius_;
+    options.overview_resolution = 48;
+
+    runtime_ = std::make_unique<sim::SimulationRuntime>(std::move(world), options);
+    runtime_->start();
+    last_emitted_tick_ = -1;
 }
 
-void SimWorld::ensure_world() {
-    if (!world_) {
-        world_ = std::make_unique<sim::World>(config_);
-        stepper_ = sim::Stepper(config_.tick_dt, stepper_max_steps());
+void SimWorld::ensure_runtime() {
+    if (!runtime_) {
+        reset_world();
     }
 }
 
-void SimWorld::seed_initial_world() {
-    ensure_world();
+std::unique_ptr<sim::World> SimWorld::create_seeded_world() {
+    auto world = std::make_unique<sim::World>(config_);
+    seed_initial_world(*world);
+    return world;
+}
+
+void SimWorld::seed_initial_world(sim::World& world) {
     if (island_mode_) {
         sim::IslandScenarioConfig scenario;
         scenario.seed = config_.seed;
-        static_cast<void>(sim::seed_temperate_island(*world_, scenario));
-        demo_spawned_ = true;
+        static_cast<void>(sim::seed_temate_island(world, scenario));
         return;
     }
-    spawn_demo_agents();
-    world_->flush_commands();
+    spawn_demo_agents(world);
+    world.flush_commands();
 }
 
-void SimWorld::spawn_demo_agents() {
-    if (demo_spawned_ || demo_agent_count_ <= 0) {
+void SimWorld::spawn_demo_agents(sim::World& world) {
+    if (demo_agent_count_ <= 0) {
         return;
     }
-    ensure_world();
     const double n = static_cast<double>(demo_agent_count_);
     for (int32_t i = 0; i < demo_agent_count_; ++i) {
         const double angle = (2.0 * std::numbers::pi * static_cast<double>(i)) / n;
         const sim::Vec3 position{std::cos(angle) * 4.0, 0.4, std::sin(angle) * 4.0};
-        const sim::Vec3 velocity{-std::sin(angle) * 2.0, 0.0, std::cos(angle) * 4.0 * 0.5};
-        static_cast<void>(world_->enqueue_spawn(position, velocity));
+        const sim::Vec3 velocity{-std::sin(angle) * 2.0, 0.0, std::cos(angle) * 2.0};
+        static_cast<void>(world.enqueue_spawn(position, velocity));
     }
-    demo_spawned_ = true;
 }
 
 godot::Ref<SimSnapshot> SimWorld::make_snapshot(const sim::Snapshot& snapshot, double alpha) const {
