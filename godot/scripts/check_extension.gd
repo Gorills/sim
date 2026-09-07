@@ -231,6 +231,25 @@ func _process(_delta: float) -> bool:
 		quit(1)
 		return true
 
+	_world.set("render_center", deer_pos)
+	_world.set("render_radius", 1200.0)
+	_world.call("refresh_render_interest")
+	_view.call("_refresh_terrain", true)
+	var returned_region_count := int(_view.call("terrain3d_region_count"))
+	var reactivate_ok := returned_region_count >= 1 and returned_region_count <= 4
+	print(
+		"SIM_CHECK terrain_reactivate_ok=",
+		reactivate_ok,
+		" active_regions_after_return=",
+		returned_region_count
+	)
+	if not reactivate_ok:
+		push_error("Terrain3D failed to reactivate a previously removed interest region.")
+		_view.free()
+		_world.free()
+		quit(1)
+		return true
+
 	var map_view := Node3D.new()
 	map_view.set_script(load("res://scripts/world_map_view.gd"))
 	viewport.add_child(map_view)
