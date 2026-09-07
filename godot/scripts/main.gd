@@ -9,14 +9,16 @@ extends Node3D
 @onready var camera: Camera3D = $Camera3D
 @onready var sun: DirectionalLight3D = $DirectionalLight3D
 @onready var world_environment: WorldEnvironment = $WorldEnvironment
+@onready var ocean: MeshInstance3D = $Ocean
+@onready var overview: Control = %WorldOverview
 
 var _sim: Node
 var _speed_scale: float = 1.0
-var _camera_distance: float = 1.0
+var _camera_distance: float = 1200.0
 var _camera_target := Vector3.ZERO
 var _camera_yaw: float = 0.0
-var _camera_pitch: float = deg_to_rad(36.0)
-var _island_extent: float = 48.0
+var _camera_pitch: float = deg_to_rad(55.0)
+var _island_extent: float = 19200.0
 
 
 func _ready() -> void:
@@ -34,6 +36,9 @@ func _ready() -> void:
 	move_child(_sim, 0)
 	if world_view.has_method("bind_sim"):
 		world_view.call("bind_sim", _sim)
+	if overview != null and overview.has_method("bind_sim"):
+		overview.call("bind_sim", _sim)
+	_refresh_world_extent()
 	_fit_camera()
 	_rebuild_legend()
 	print("SIM: entities=", _sim.call("get_entity_count"), " tick=", _sim.call("get_tick_index"))
@@ -44,10 +49,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_camera_distance = clampf(_camera_distance * 0.86, 0.08, 2.4)
+			_camera_distance = clampf(_camera_distance * 0.86, 250.0, 4000.0)
 			_fit_camera()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_camera_distance = clampf(_camera_distance * 1.16, 0.08, 2.4)
+			_camera_distance = clampf(_camera_distance * 1.16, 250.0, 4000.0)
 			_fit_camera()
 	if event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
@@ -66,7 +71,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var forward := -camera.global_transform.basis.z
 			forward.y = 0.0
 			forward = forward.normalized()
-			var pan_scale := _island_extent * _camera_distance * 0.0018
+			var pan_scale := _camera_distance * 0.0018
 			_camera_target += (-right * motion.relative.x + forward * motion.relative.y) * pan_scale
 			var half_extent := _island_extent * 0.48
 			_camera_target.x = clampf(_camera_target.x, -half_extent, half_extent)
@@ -78,6 +83,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_sim.set("paused", not bool(_sim.get("paused")))
 			KEY_R:
 				_sim.call("reset_world")
+				_refresh_world_extent()
 				_rebuild_legend()
 				_fit_camera()
 			KEY_1:
@@ -86,6 +92,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_set_speed(4.0)
 			KEY_3:
 				_set_speed(16.0)
+			KEY_M:
+				if overview != null and overview.has_method("toggle_expanded"):
+					overview.call("toggle_expanded")
 
 
 func _process(_delta: float) -> void:
@@ -98,7 +107,7 @@ func _process(_delta: float) -> void:
 	var hour := float(stats.get("hour_of_day", 0.0))
 	_update_daylight(hour)
 	var populations: Dictionary = stats.get("populations", {})
-	hud.text = "day %.2f   %s %s   %.0fx   entities %s   %s\nclimate  moisture %.2f   %.1f C   canopy %.3f (max %.2f)   light %.2f   organic %.3f (max %.2f)   pollen %.3f (max %.2f)\nguilds  plants %s   herbivores %s   omnivores %s   carnivores %s   insects %s (activity %.2f)   decomposers %s\nbehavior  rest %s   roam %s   group %s   forage %s   feed %s   drink %s   flee %s\n%s\nSpace pause   R reset   1/2/3 speed   wheel zoom   RMB orbit   MMB pan" % [
+	hud.text = "day %.2f   %s %s   %.0fx   entities %s   %s\nclimate  moisture %.2f   %.1f C   canopy %.3f (max %.2f)   light %.2f   organic %.3f (max %.2f)   pollen %.3f (max %.2f)\nguilds  plants %s   herbivores %s   omnivores %s   carnivores %s   insects %s (activity %.2f)   decomposers %s\nbehavior  rest %s   roam %s   group %s   forage %s   feed %s   drink %s   flee %s\n%s\nSpace pause   R reset   1/2/3 speed   M overview   wheel zoom   RMB orbit   MMB pan" % [
 		days,
 		season,
 		_clock_text(hour),
@@ -137,22 +146,42 @@ func _set_speed(scale: float) -> void:
 	_sim.set("speed_scale", scale)
 
 
+func _refresh_world_extent() -> void:
+	if _sim == null or not _sim.has_method("get_world_overview"):
+		return
+	var data: Dictionary = _sim.call("get_world_overview", 16)
+	var width := int(data.get("width", 0))
+	var height := int(data.get("height", 0))
+	var cell_size := float(data.get("cell_size", 0.0))
+	if width > 0 and height > 0 and cell_size > 0.0:
+		_island_extent = maxf(float(width), float(height)) * cell_size
+	var ocean_scale := (_island_extent * 1.35) / 96.0
+	ocean.scale = Vector3(ocean_scale, 1.0, ocean_scale)
+
+
+func _sync_render_interest() -> void:
+	if _sim == null:
+		return
+	var radius := clampf(_camera_distance * 1.85, 800.0, 5000.0)
+	_sim.set("render_center", _camera_target)
+	_sim.set("render_radius", radius)
+
+
 func _fit_camera() -> void:
-	if _sim == null or not _sim.has_method("get_habitat_grid"):
+	if _sim == null:
 		return
-	var habitat: Object = _sim.call("get_habitat_grid")
-	if habitat == null:
-		return
-	_island_extent = float(habitat.get("width")) * float(habitat.get("cell_size"))
-	var distance := _island_extent * 0.88 * _camera_distance
+	var distance := _camera_distance
 	var horizontal := cos(_camera_pitch) * distance
 	camera.position = _camera_target + Vector3(
 		sin(_camera_yaw) * horizontal,
 		sin(_camera_pitch) * distance,
 		cos(_camera_yaw) * horizontal
 	)
-	camera.look_at(_camera_target + Vector3.UP * 0.2)
+	camera.look_at(_camera_target + Vector3.UP * 20.0)
 	camera.fov = 48.0
+	camera.far = 12000.0
+	sun.directional_shadow_max_distance = clampf(_camera_distance * 2.5, 1200.0, 6000.0)
+	_sync_render_interest()
 
 
 func _update_daylight(hour: float) -> void:
