@@ -6,7 +6,7 @@ const Actions = preload("res://scripts/input_actions.gd")
 const Minimap = preload("res://scripts/world_minimap.gd")
 
 const EXPECTED_TICK_HZ := 20.0
-const EXPECTED_ECOLOGY_STEP := 1.0 / 80.0
+const EXPECTED_ECOLOGY_STEP := 1.0 / 1200.0
 const EXPECTED_RENDER_RADIUS := 450.0
 
 
