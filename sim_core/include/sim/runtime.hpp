@@ -39,6 +39,7 @@ struct RuntimeFrame {
     bool paused = false;
     Vec3 render_center{};
     double render_radius = 0.0;
+    std::uint64_t render_generation = 0;
     SimulationLodSummary lod_summary{};
 };
 
@@ -132,6 +133,7 @@ private:
     double render_radius_ = 450.0;
     std::size_t overview_resolution_ = 48;
     bool render_habitat_dirty_ = false;
+    std::uint64_t render_generation_ = 0;
     bool overview_dirty_ = false;
 
     Clock::time_point last_stats_refresh_{};
