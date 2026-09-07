@@ -522,8 +522,9 @@ void test_prey_flees_from_a_nearby_predator() {
     if (before_flight.has_value() && before_wolf.has_value() &&
         after.has_value() && after_wolf.has_value()) {
         CHECK(after->intent == sim::BehaviorIntent::fleeing);
-        CHECK(sim::length(after->position - after_wolf->position) >
-              sim::length(before_flight->position - before_wolf->position));
+        const sim::Vec3 away = before_flight->position - before_wolf->position;
+        const sim::Vec3 movement = after->position - before_flight->position;
+        CHECK(away.x * movement.x + away.z * movement.z > 0.0);
     }
 }
 
