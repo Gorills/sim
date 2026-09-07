@@ -2,7 +2,19 @@ name: core-ci
 
 on:
   push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+concurrency:
+  group: core-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,7 +23,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Configure
         run: cmake --preset release -DSIM_WARNINGS_AS_ERRORS=ON
       - name: Build
@@ -22,7 +34,7 @@ jobs:
   sanitizers:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Configure
         run: cmake --preset debug -DSIM_WARNINGS_AS_ERRORS=ON
       - name: Build
@@ -31,21 +43,64 @@ jobs:
         run: ctest --preset debug
 
   gdextension:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      GODOT_VERSION: "4.5.1"
+      GODOT_CPP_TAG: "godot-4.5-stable"
+      SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
+      SCCACHE_CACHE_SIZE: "1G"
     steps:
-      - uses: actions/checkout@v4
-      - name: Configure
-        run: cmake --preset debug-godot
-      - name: Build
-        run: cmake --build --preset debug-godot --parallel 2
-      - name: Test core through GDExtension preset
-        run: ctest --preset debug-godot
-      - name: Download Godot 4.5.1
+      - uses: actions/checkout@v7.0.1
+
+      - name: Restore godot-cpp source
+        id: godot-cpp-source
+        uses: actions/cache@v6.1.0
+        with:
+          path: third_party/godot-cpp
+          key: godot-cpp-source-v1-${{ runner.os }}-${{ env.GODOT_CPP_TAG }}
+
+      - name: Fetch godot-cpp
+        if: steps.godot-cpp-source.outputs.cache-hit != 'true'
+        run: scripts/fetch_godot_cpp.sh "$GODOT_CPP_TAG"
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6.1.0
+        with:
+          path: .cache/sccache
+          key: godot-sccache-v1-${{ runner.os }}-gcc13-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'sim_godot/godot_cpp_build_profile.json') }}
+          restore-keys: |
+            godot-sccache-v1-${{ runner.os }}-gcc13-
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Configure minimal GDExtension build
+        run: cmake --preset ci-godot -DSIM_WARNINGS_AS_ERRORS=ON -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build GDExtension
+        run: cmake --build --preset ci-godot --target sim_godot --parallel 4
+
+      - name: Restore Godot
+        id: godot-binary
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ runner.temp }}/godot-${{ env.GODOT_VERSION }}
+          key: godot-binary-v1-linux-x86_64-${{ env.GODOT_VERSION }}
+
+      - name: Download Godot
+        if: steps.godot-binary.outputs.cache-hit != 'true'
         run: |
-          curl -fL "https://godot-releases.nbg1.your-objectstorage.com/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip" -o /tmp/godot.zip
-          unzip -q /tmp/godot.zip -d /tmp/godot
-          chmod +x /tmp/godot/Godot_v4.5.1-stable_linux.x86_64
+          mkdir -p "$RUNNER_TEMP/godot-$GODOT_VERSION"
+          curl -fsSL "https://godot-releases.nbg1.your-objectstorage.com/$GODOT_VERSION-stable/Godot_v$GODOT_VERSION-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-$GODOT_VERSION"
+
       - name: Import Godot project
-        run: /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --headless --path godot --import
+        run: |
+          GODOT="$RUNNER_TEMP/godot-$GODOT_VERSION/Godot_v$GODOT_VERSION-stable_linux.x86_64"
+          chmod +x "$GODOT"
+          "$GODOT" --headless --path godot --import
+
       - name: Smoke-run Godot project
-        run: /tmp/godot/Godot_v4.5.1-stable_linux.x86_64 --headless --path godot --quit-after 3
+        run: |
+          GODOT="$RUNNER_TEMP/godot-$GODOT_VERSION/Godot_v$GODOT_VERSION-stable_linux.x86_64"
+          "$GODOT" --headless --path godot --quit-after 3
