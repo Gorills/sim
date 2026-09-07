@@ -6,7 +6,7 @@ extends Control
 const Palette = preload("res://scripts/visualization_palette.gd")
 
 const REFRESH_SEC := 0.75
-const NORMAL_SIZE := Vector2(360.0, 360.0)
+const NORMAL_SIZE := Vector2(300.0, 300.0)
 const MARGIN := 16.0
 
 var _sim: Node
@@ -68,7 +68,7 @@ func _layout() -> bool:
 		size = NORMAL_SIZE
 		position = Vector2(
 			maxf(MARGIN, viewport_size.x - size.x - MARGIN),
-			maxf(332.0, viewport_size.y - size.y - MARGIN)
+			maxf(310.0, viewport_size.y - size.y - 82.0)
 		)
 	return previous_size != size or previous_position != position
 
