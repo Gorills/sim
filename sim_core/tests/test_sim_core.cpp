@@ -503,18 +503,27 @@ void test_prey_flees_from_a_nearby_predator() {
     const sim::EntityId rabbit =
         world.enqueue_organism(sim::species::rabbit, rabbit_at, 20.0, 24.0 * 120.0);
     CHECK(rabbit != 0);
-    CHECK(world.enqueue_organism(sim::species::wolf, wolf_at, 20.0, 24.0 * 800.0) != 0);
+    const sim::EntityId wolf =
+        world.enqueue_organism(sim::species::wolf, wolf_at, 20.0, 24.0 * 800.0);
+    CHECK(wolf != 0);
     world.flush_commands();
     world.tick();
-    const auto before_flight = sim::find_entity(world.snapshot(), rabbit);
+    const sim::Snapshot before = world.snapshot();
+    const auto before_flight = sim::find_entity(before, rabbit);
+    const auto before_wolf = sim::find_entity(before, wolf);
     CHECK(before_flight.has_value());
+    CHECK(before_wolf.has_value());
     world.tick();
-    const auto after = sim::find_entity(world.snapshot(), rabbit);
+    const sim::Snapshot after_snapshot = world.snapshot();
+    const auto after = sim::find_entity(after_snapshot, rabbit);
+    const auto after_wolf = sim::find_entity(after_snapshot, wolf);
     CHECK(after.has_value());
-    if (before_flight.has_value() && after.has_value()) {
+    CHECK(after_wolf.has_value());
+    if (before_flight.has_value() && before_wolf.has_value() &&
+        after.has_value() && after_wolf.has_value()) {
         CHECK(after->intent == sim::BehaviorIntent::fleeing);
-        CHECK(sim::length(after->position - wolf_at) >
-              sim::length(before_flight->position - wolf_at));
+        CHECK(sim::length(after->position - after_wolf->position) >
+              sim::length(before_flight->position - before_wolf->position));
     }
 }
 
