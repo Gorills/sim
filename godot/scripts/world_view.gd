@@ -523,12 +523,12 @@ func _create_terrain3d(cell_size: float) -> void:
 		return
 
 	_terrain3d.name = "IslandTerrain3D"
-	_terrain3d.call("change_region_size", TERRAIN3D_REGION_SIZE)
 	_terrain3d.set("collision_mode", 0)
 	_terrain3d.set("show_colormap", true)
 	_terrain3d.set("cast_shadows", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	_terrain3d.set("vertex_spacing", cell_size)
 	add_child(_terrain3d)
+	_terrain3d.call("change_region_size", TERRAIN3D_REGION_SIZE)
 	_terrain3d_cell_size = cell_size
 
 	var material: Object = (
