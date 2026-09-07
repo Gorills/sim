@@ -15,7 +15,8 @@ const CAMERA_LOOK_LEFT: StringName = &"camera_look_left"
 const CAMERA_LOOK_RIGHT: StringName = &"camera_look_right"
 const CAMERA_LOOK_UP: StringName = &"camera_look_up"
 const CAMERA_LOOK_DOWN: StringName = &"camera_look_down"
-const CAMERA_LOOK_DRAG: StringName = &"camera_look_drag"
+const CAMERA_LOOK_CAPTURE: StringName = &"camera_look_capture"
+const CAMERA_LOOK_RELEASE: StringName = &"camera_look_release"
 
 const CAMERA_SPEED_INCREASE: StringName = &"camera_speed_increase"
 const CAMERA_SPEED_DECREASE: StringName = &"camera_speed_decrease"
@@ -40,7 +41,8 @@ static func required_actions() -> PackedStringArray:
 		CAMERA_LOOK_RIGHT,
 		CAMERA_LOOK_UP,
 		CAMERA_LOOK_DOWN,
-		CAMERA_LOOK_DRAG,
+		CAMERA_LOOK_CAPTURE,
+		CAMERA_LOOK_RELEASE,
 		CAMERA_SPEED_INCREASE,
 		CAMERA_SPEED_DECREASE,
 		CAMERA_SPEED_BOOST,
