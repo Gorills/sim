@@ -10,14 +10,17 @@ const CAMERA_FOCUS_HEIGHT := 1.35
 const DEFAULT_PITCH := deg_to_rad(-10.0)
 const MIN_PITCH := deg_to_rad(-45.0)
 const MAX_PITCH := deg_to_rad(22.0)
-const DEFAULT_SPEED := 12.0
-const MIN_SPEED := 4.0
-const MAX_SPEED := 120.0
+const DEFAULT_SPEED := 6.0
+const MIN_SPEED := 2.0
+const MAX_SPEED := 80.0
 const SPEED_STEP := 1.30
-const BOOST_FACTOR := 5.0
+const BOOST_FACTOR := 2.0
 const MOVE_RESPONSE := 11.0
+const AVATAR_TURN_RESPONSE := 12.0
 const LOOK_SPEED := 1.85
-const MOUSE_LOOK_SENSITIVITY := 0.0035
+const MOUSE_LOOK_SENSITIVITY := 0.0025
+const CAMERA_GROUND_CLEARANCE := 0.45
+const CAMERA_COLLISION_SAMPLES := 8
 const GROUND_CLEARANCE := 0.9
 const MAX_WORLD_Y := 520.0
 
@@ -41,6 +44,7 @@ var _world_bounds := Rect2(Vector2(-9600.0, -9600.0), Vector2(19200.0, 19200.0))
 var _anchor_position := Vector3.ZERO
 var _velocity := Vector3.ZERO
 var _yaw := 0.0
+var _avatar_yaw := 0.0
 var _pitch := DEFAULT_PITCH
 var _fly_speed := DEFAULT_SPEED
 var _last_stream_center := Vector3.INF
@@ -55,12 +59,15 @@ func bind_sim(sim: Node, world_bounds: Rect2, spawn_position: Vector3) -> void:
 	set_world_bounds(world_bounds)
 	_velocity = Vector3.ZERO
 	_yaw = 0.0
+	_avatar_yaw = 0.0
 	_pitch = DEFAULT_PITCH
 	_fly_speed = DEFAULT_SPEED
 	_anchor_position = _clamp_horizontal(spawn_position)
 	_last_stream_center = Vector3.INF
 	_sync_render_interest(true)
 	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_apply_camera()
 
 
@@ -130,6 +137,7 @@ func _process(delta: float) -> void:
 		MAX_WORLD_Y
 	)
 
+	_update_avatar_facing(delta)
 	_sync_render_interest(false)
 	_apply_camera()
 
@@ -138,14 +146,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _sim == null:
 		return
 
-	if event.is_action_pressed(Actions.CAMERA_LOOK_DRAG):
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		get_viewport().set_input_as_handled()
+	if event.is_action_pressed(Actions.CAMERA_LOOK_RELEASE):
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			get_viewport().set_input_as_handled()
 		return
-	if event.is_action_released(Actions.CAMERA_LOOK_DRAG):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		get_viewport().set_input_as_handled()
-		return
+	if event.is_action_pressed(Actions.CAMERA_LOOK_CAPTURE):
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			get_viewport().set_input_as_handled()
+			return
 
 	if event.is_action_pressed(Actions.CAMERA_SPEED_INCREASE):
 		_fly_speed = clampf(_fly_speed * SPEED_STEP, MIN_SPEED, MAX_SPEED)
@@ -156,11 +166,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventMouseMotion and Input.is_action_pressed(Actions.CAMERA_LOOK_DRAG):
+	if (
+		event is InputEventMouseMotion
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		and _camera_input_allowed()
+	):
 		var motion := event as InputEventMouseMotion
-		_yaw -= motion.relative.x * MOUSE_LOOK_SENSITIVITY
+		_yaw -= motion.screen_relative.x * MOUSE_LOOK_SENSITIVITY
 		_pitch = clampf(
-			_pitch - motion.relative.y * MOUSE_LOOK_SENSITIVITY,
+			_pitch - motion.screen_relative.y * MOUSE_LOOK_SENSITIVITY,
 			MIN_PITCH,
 			MAX_PITCH
 		)
@@ -210,9 +224,8 @@ func _apply_gamepad_look(delta: float) -> void:
 func _apply_camera() -> void:
 	var focus := _anchor_position + Vector3.UP * CAMERA_FOCUS_HEIGHT
 	var direction := _look_direction()
-	var camera_position := focus - direction * CAMERA_DISTANCE
-	var camera_ground := _ground_height(camera_position) + 0.45
-	camera_position.y = maxf(camera_position.y, camera_ground)
+	var desired_camera_position := focus - direction * CAMERA_DISTANCE
+	var camera_position := _terrain_safe_camera_position(focus, desired_camera_position)
 
 	_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	_camera.near = 0.10
@@ -222,9 +235,34 @@ func _apply_camera() -> void:
 
 	if _avatar != null:
 		_avatar.position = _anchor_position
-		_avatar.rotation.y = _yaw
+		_avatar.rotation.y = _avatar_yaw
 	if _sun != null:
 		_sun.directional_shadow_max_distance = SHADOW_DISTANCE
+
+
+func _update_avatar_facing(delta: float) -> void:
+	var horizontal_velocity := Vector2(_velocity.x, _velocity.z)
+	if horizontal_velocity.length_squared() <= 0.01:
+		return
+	var target_yaw := atan2(_velocity.x, -_velocity.z)
+	var response := 1.0 - exp(-AVATAR_TURN_RESPONSE * delta)
+	_avatar_yaw = lerp_angle(_avatar_yaw, target_yaw, response)
+
+
+func _terrain_safe_camera_position(focus: Vector3, desired: Vector3) -> Vector3:
+	var safe_position := focus
+	for sample_index in range(1, CAMERA_COLLISION_SAMPLES + 1):
+		var t := float(sample_index) / float(CAMERA_COLLISION_SAMPLES)
+		var sample := focus.lerp(desired, t)
+		var ground_y := _ground_height(sample) + CAMERA_GROUND_CLEARANCE
+		if sample.y < ground_y:
+			var safe_t := maxf(
+				0.0,
+				float(sample_index - 1) / float(CAMERA_COLLISION_SAMPLES) - 0.03
+			)
+			return focus.lerp(desired, safe_t)
+		safe_position = sample
+	return safe_position
 
 
 func _look_direction() -> Vector3:
