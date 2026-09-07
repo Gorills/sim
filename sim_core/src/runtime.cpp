@@ -8,7 +8,7 @@ namespace sim {
 
 namespace {
 
-double wall_seconds(sim::SimulationRuntime::Clock::time_point time) {
+double wall_seconds(std::chrono::steady_clock::time_point time) {
     return std::chrono::duration<double>(time.time_since_epoch()).count();
 }
 
@@ -134,28 +134,8 @@ EntityId SimulationRuntime::enqueue_spawn(Vec3 position, Vec3 velocity) {
     Command command;
     command.kind = CommandKind::spawn;
     command.vector_value = position;
-    command.first = velocity.x;
-    command.second = velocity.y;
-    command.id = 0;
+    command.vector_value2 = velocity;
     command.spawn_result = result;
-    // velocity.z cannot share the scalar fields with future command extensions,
-    // so use the otherwise unused size field as a bit-preserving transport is
-    // deliberately avoided. Store velocity in a second command vector instead.
-    // For this command vector_value is position; id is not enough for velocity.
-    // Use a tiny heap payload through a second promise is unnecessary: encode
-    // velocity in working command fields by adding it to position is incorrect.
-    // This branch is replaced below before the command is pushed.
-    struct SpawnPayload {
-        Vec3 position;
-        Vec3 velocity;
-    };
-    // Keep Command POD-like: send position now and velocity through a temporary
-    // static-free side channel is not thread-safe. Instead enqueue generic
-    // velocity using first/second and retain z in size_value via memcpy.
-    std::uint64_t z_bits = 0;
-    static_assert(sizeof(double) == sizeof(std::uint64_t));
-    std::memcpy(&z_bits, &velocity.z, sizeof(double));
-    command.size_value = static_cast<std::size_t>(z_bits);
     push(std::move(command));
     return future.get();
 }
@@ -267,10 +247,8 @@ bool SimulationRuntime::process_commands() {
             publication_dirty = true;
             break;
         case CommandKind::spawn: {
-            Vec3 velocity{command.first, command.second, 0.0};
-            const std::uint64_t z_bits = static_cast<std::uint64_t>(command.size_value);
-            std::memcpy(&velocity.z, &z_bits, sizeof(double));
-            const EntityId id = world_->enqueue_spawn(command.vector_value, velocity);
+            const EntityId id =
+                world_->enqueue_spawn(command.vector_value, command.vector_value2);
             if (command.spawn_result) {
                 command.spawn_result->set_value(id);
             }
