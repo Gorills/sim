@@ -41,6 +41,8 @@ var _sim: Node
 var _mesh_terrain: MeshInstance3D
 var _terrain_material: StandardMaterial3D
 var _terrain3d: Node
+var _terrain3d_region_keys: Dictionary = {}
+var _terrain3d_cell_size := 0.0
 var _fresh_water: MeshInstance3D
 var _batches: Dictionary = {}
 var _catalog: Dictionary = {}
@@ -52,6 +54,7 @@ var _material_cache: Dictionary = {}
 const ORGANISM_MESH_DIR := "res://assets/organisms/"
 const RELIEF := 420.0
 const TERRAIN_REFRESH_SEC := 0.35
+const TERRAIN3D_REGION_SIZE := 64
 const SAND := Color("#8f8058")
 const SOIL := Color("#66543b")
 const TRUNK := Color("#59442f")
@@ -108,7 +111,28 @@ func terrain3d_debug() -> String:
 	var data: Object = _terrain3d_data()
 	if data == null:
 		return "no_data tree=%s" % str(_terrain3d.is_inside_tree())
-	return "regions=%s tree=%s" % [str(data.call("get_region_count")), str(_terrain3d.is_inside_tree())]
+	return "regions=%s region_size=%s tree=%s" % [
+		str(data.call("get_region_count")),
+		str(terrain3d_region_size()),
+		str(_terrain3d.is_inside_tree()),
+	]
+
+
+func terrain3d_region_size() -> int:
+	return int(_terrain3d.get("region_size")) if _terrain3d != null else 0
+
+
+func terrain3d_region_count() -> int:
+	var data: Object = _terrain3d_data()
+	return int(data.call("get_region_count")) if data != null else 0
+
+
+func set_detail_active(active: bool) -> void:
+	visible = active
+	set_process(active)
+	if active and _sim != null:
+		_terrain_clock = 999.0
+		_refresh_terrain(true)
 
 
 func _terrain3d_data() -> Object:
@@ -484,21 +508,34 @@ func _capsule(radius: float, height: float) -> CapsuleMesh:
 
 
 func _create_terrain3d(cell_size: float) -> void:
+	if _terrain3d != null and is_equal_approx(_terrain3d_cell_size, cell_size):
+		return
 	if _terrain3d != null:
 		if _terrain3d.get_parent() == self:
 			remove_child(_terrain3d)
 		_terrain3d.free()
 		_terrain3d = null
+
+	_terrain3d_region_keys.clear()
+	_terrain3d_cell_size = 0.0
 	_terrain3d = ClassDB.instantiate("Terrain3D") as Node
 	if _terrain3d == null:
 		return
+
 	_terrain3d.name = "IslandTerrain3D"
 	_terrain3d.set("collision_mode", 0)
 	_terrain3d.set("show_colormap", true)
 	_terrain3d.set("cast_shadows", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	_terrain3d.set("vertex_spacing", cell_size)
 	add_child(_terrain3d)
-	var material: Object = _terrain3d.call("get_material") if _terrain3d.has_method("get_material") else null
+	_terrain3d.call("change_region_size", TERRAIN3D_REGION_SIZE)
+	_terrain3d_cell_size = cell_size
+
+	var material: Object = (
+		_terrain3d.call("get_material")
+		if _terrain3d.has_method("get_material")
+		else null
+	)
 	if material != null:
 		material.set("show_colormap", true)
 		material.set("world_background", 0)
@@ -576,7 +613,7 @@ func _build_terrain_mesh(habitat: Object, rebuild_geometry: bool = true) -> void
 
 	_build_fresh_water_mesh(habitat)
 	if ClassDB.class_exists("Terrain3D"):
-		if rebuild_geometry or _terrain3d == null:
+		if _terrain3d == null or not is_equal_approx(_terrain3d_cell_size, cell_size):
 			_create_terrain3d(cell_size)
 			_mesh_terrain.mesh = null
 			_mesh_terrain.visible = false
@@ -672,16 +709,14 @@ func _upload_terrain3d(habitat: Object, rebuild_geometry: bool) -> void:
 	var data: Object = _terrain3d_data()
 	if data == null:
 		return
+
 	var width := int(habitat.get("width"))
 	var height := int(habitat.get("height"))
 	var cell_size := float(habitat.get("cell_size"))
 	var origin: Vector3 = habitat.get("origin")
 	if rebuild_geometry:
-		_terrain3d.set("vertex_spacing", cell_size)
-		var min_pos := origin
-		var max_pos := origin + Vector3(float(width) * cell_size, 0.0, float(height) * cell_size)
-		for pos in [min_pos, Vector3(max_pos.x, 0.0, min_pos.z), Vector3(min_pos.x, 0.0, max_pos.z), max_pos]:
-			data.call("add_region_blankp", pos, false)
+		_sync_terrain3d_regions(data, origin, width, height, cell_size)
+
 	for vertex_z in range(height + 1):
 		for vertex_x in range(width + 1):
 			var vertex_index := vertex_z * (width + 1) + vertex_x
@@ -693,12 +728,57 @@ func _upload_terrain3d(habitat: Object, rebuild_geometry: bool) -> void:
 			if rebuild_geometry:
 				data.call("set_height", pos, _terrain_heights[vertex_index])
 			data.call("set_color", pos, _terrain_colors[vertex_index])
+
 	if data.has_method("update_maps"):
 		data.call("update_maps")
 	elif data.has_method("force_update_maps"):
 		data.call("force_update_maps")
 	if rebuild_geometry and data.has_method("calc_height_range"):
 		data.call("calc_height_range", true)
+
+
+func _sync_terrain3d_regions(
+	data: Object,
+	origin: Vector3,
+	width: int,
+	height: int,
+	cell_size: float
+) -> void:
+	var region_world_size := float(TERRAIN3D_REGION_SIZE) * cell_size
+	if region_world_size <= 0.0:
+		return
+
+	var max_world := origin + Vector3(
+		float(width) * cell_size,
+		0.0,
+		float(height) * cell_size
+	)
+	var min_region_x := int(floor(origin.x / region_world_size))
+	var min_region_z := int(floor(origin.z / region_world_size))
+	var max_region_x := int(floor(max_world.x / region_world_size))
+	var max_region_z := int(floor(max_world.z / region_world_size))
+
+	var wanted: Dictionary = {}
+	for region_z in range(min_region_z, max_region_z + 1):
+		for region_x in range(min_region_x, max_region_x + 1):
+			var key := Vector2i(region_x, region_z)
+			wanted[key] = true
+
+	for key in _terrain3d_region_keys.keys():
+		if wanted.has(key):
+			continue
+		data.call("remove_regionl", key, false)
+
+	for key in wanted.keys():
+		if _terrain3d_region_keys.has(key):
+			continue
+		var existing: Variant = data.call("get_region", key)
+		if existing != null:
+			data.call("add_region", existing, false)
+		else:
+			data.call("add_region_blank", key, false)
+
+	_terrain3d_region_keys = wanted
 
 
 func _terrain_vertex_sample(

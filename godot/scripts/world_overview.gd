@@ -1,18 +1,17 @@
 extends Control
 
-## Cheap whole-world overview. The C++ bridge returns aggregated cells only;
+## Cheap whole-world minimap. The C++ bridge returns aggregated cells only;
 ## no full entity list or 3D instances are created for off-screen simulation.
 
-const SURFACE_LAND := 0
-const SURFACE_OCEAN := 1
-const SURFACE_FRESH := 2
+const Palette = preload("res://scripts/visualization_palette.gd")
+
 const REFRESH_SEC := 0.75
-const NORMAL_SIZE := Vector2(360.0, 360.0)
+const NORMAL_SIZE := Vector2(300.0, 300.0)
 const MARGIN := 16.0
 
 var _sim: Node
 var _data: Dictionary = {}
-var _refresh_clock: float = 999.0
+var _refresh_clock := 999.0
 var _expanded := false
 
 
@@ -36,14 +35,19 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_layout()
+	var layout_changed := _layout()
 	if _sim == null:
+		if layout_changed:
+			queue_redraw()
 		return
+
 	_refresh_clock += delta
 	if _refresh_clock >= REFRESH_SEC:
 		_refresh()
 		_refresh_clock = 0.0
-	queue_redraw()
+		queue_redraw()
+	elif layout_changed:
+		queue_redraw()
 
 
 func _refresh() -> void:
@@ -52,7 +56,9 @@ func _refresh() -> void:
 	_data = _sim.call("get_world_overview", 96)
 
 
-func _layout() -> void:
+func _layout() -> bool:
+	var previous_size := size
+	var previous_position := position
 	var viewport_size := get_viewport_rect().size
 	if _expanded:
 		var side := minf(viewport_size.x, viewport_size.y) * 0.84
@@ -62,13 +68,14 @@ func _layout() -> void:
 		size = NORMAL_SIZE
 		position = Vector2(
 			maxf(MARGIN, viewport_size.x - size.x - MARGIN),
-			maxf(220.0, viewport_size.y - size.y - MARGIN)
+			maxf(310.0, viewport_size.y - size.y - 82.0)
 		)
+	return previous_size != size or previous_position != position
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.015, 0.025, 0.035, 0.88), true)
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.55, 0.68, 0.72, 0.8), false, 1.0)
+	draw_rect(Rect2(Vector2.ZERO, size), Palette.OVERVIEW_BACKGROUND, true)
+	draw_rect(Rect2(Vector2.ZERO, size), Palette.OVERVIEW_BORDER, false, 1.0)
 	if _data.is_empty():
 		return
 
@@ -91,7 +98,7 @@ func _draw() -> void:
 	for z in range(height):
 		for x in range(width):
 			var i := z * width + x
-			var color := _cell_color(
+			var color := Palette.overview_cell_color(
 				int(surface[i]),
 				int(plants[i]) if i < plants.size() else 0,
 				int(herbivores[i]) if i < herbivores.size() else 0,
@@ -100,7 +107,10 @@ func _draw() -> void:
 				int(insects[i]) if i < insects.size() else 0
 			)
 			draw_rect(
-				Rect2(map_rect.position + Vector2(float(x), float(z)) * pixel, pixel + Vector2(0.5, 0.5)),
+				Rect2(
+					map_rect.position + Vector2(float(x), float(z)) * pixel,
+					pixel + Vector2(0.5, 0.5)
+				),
 				color,
 				true
 			)
@@ -109,8 +119,14 @@ func _draw() -> void:
 	var render_radius := float(_data.get("render_radius", 0.0))
 	var world_size := Vector2(float(width) * cell_size, float(height) * cell_size)
 	if world_size.x > 0.0 and world_size.y > 0.0 and render_radius > 0.0:
-		var min_world := Vector2(render_center.x - render_radius - origin.x, render_center.z - render_radius - origin.z)
-		var max_world := Vector2(render_center.x + render_radius - origin.x, render_center.z + render_radius - origin.z)
+		var min_world := Vector2(
+			render_center.x - render_radius - origin.x,
+			render_center.z - render_radius - origin.z
+		)
+		var max_world := Vector2(
+			render_center.x + render_radius - origin.x,
+			render_center.z + render_radius - origin.z
+		)
 		var min_px := map_rect.position + Vector2(
 			clampf(min_world.x / world_size.x, 0.0, 1.0) * map_rect.size.x,
 			clampf(min_world.y / world_size.y, 0.0, 1.0) * map_rect.size.y
@@ -119,39 +135,14 @@ func _draw() -> void:
 			clampf(max_world.x / world_size.x, 0.0, 1.0) * map_rect.size.x,
 			clampf(max_world.y / world_size.y, 0.0, 1.0) * map_rect.size.y
 		)
-		draw_rect(Rect2(min_px, max_px - min_px), Color(0.96, 0.96, 0.90, 0.95), false, 2.0)
+		draw_rect(Rect2(min_px, max_px - min_px), Palette.INTEREST_OUTLINE, false, 2.0)
 
 	draw_string(
 		get_theme_default_font(),
 		Vector2(10.0, 17.0),
-		"world overview   red predators / tan herbivores / orange omnivores",
+		tr("UI_WORLD_OVERVIEW_TITLE"),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		12,
-		Color(0.92, 0.94, 0.95)
+		Palette.OVERVIEW_TEXT
 	)
-
-
-func _cell_color(surface_kind: int, plant_count: int, herbivore_count: int, omnivore_count: int, carnivore_count: int, insect_count: int) -> Color:
-	if surface_kind == SURFACE_OCEAN:
-		return Color("#153344")
-	if surface_kind == SURFACE_FRESH:
-		return Color("#286270")
-
-	var color := Color("#314b31")
-	var vegetation := clampf(log(1.0 + float(plant_count)) / 4.0, 0.0, 1.0)
-	color = color.lerp(Color("#52763a"), vegetation * 0.45)
-
-	if herbivore_count > 0:
-		var strength := clampf(0.30 + log(1.0 + float(herbivore_count)) * 0.16, 0.0, 0.78)
-		color = color.lerp(Color("#c0aa77"), strength)
-	if insect_count > 0:
-		var strength := clampf(log(1.0 + float(insect_count)) * 0.10, 0.0, 0.32)
-		color = color.lerp(Color("#c6ad45"), strength)
-	if omnivore_count > 0:
-		var strength := clampf(0.42 + log(1.0 + float(omnivore_count)) * 0.14, 0.0, 0.82)
-		color = color.lerp(Color("#bf743e"), strength)
-	if carnivore_count > 0:
-		var strength := clampf(0.55 + log(1.0 + float(carnivore_count)) * 0.16, 0.0, 0.92)
-		color = color.lerp(Color("#bd4f48"), strength)
-	return color

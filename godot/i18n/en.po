@@ -1,0 +1,68 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Sim\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "UI_LOADING"
+msgstr "Loading simulation…"
+
+msgid "UI_EXTENSION_MISSING"
+msgstr "GDExtension not loaded. Build sim_godot and restart Godot."
+
+msgid "UI_LEGEND_TITLE"
+msgstr "Species"
+
+msgid "UI_WORLD_OVERVIEW_TITLE"
+msgstr "world overview · red predators / tan herbivores / orange omnivores"
+
+msgid "UI_VIEW_LOCAL"
+msgstr "LOCAL VIEW"
+
+msgid "UI_VIEW_MAP"
+msgstr "WORLD MAP"
+
+msgid "HUD_SIMULATION"
+msgstr "day %.2f · %s · %s · %.0fx · entities %s · %s"
+
+msgid "HUD_CLIMATE"
+msgstr "climate · moisture %.2f · %.1f C · canopy %.3f (max %.2f) · light %.2f · organic %.3f (max %.2f) · pollen %.3f (max %.2f)"
+
+msgid "HUD_GUILDS"
+msgstr "guilds · plants %s · herbivores %s · omnivores %s · carnivores %s · insects %s (activity %.2f) · decomposers %s"
+
+msgid "HUD_BEHAVIOR"
+msgstr "behavior · rest %s · roam %s · group %s · forage %s · feed %s · drink %s · flee %s"
+
+msgid "HUD_POPULATIONS"
+msgstr "populations · %s"
+
+msgid "HUD_POPULATIONS_EMPTY"
+msgstr "populations · —"
+
+msgid "HUD_RUNNING"
+msgstr "running"
+
+msgid "HUD_PAUSED"
+msgstr "paused"
+
+msgid "HUD_CONTROLS_LOCAL"
+msgstr "WASD / left stick move · wheel / LB / RB zoom · RMB / right stick orbit · M / Y world map · Space / Start pause · 1/2/3 speed"
+
+msgid "HUD_CONTROLS_MAP"
+msgstr "WASD / left stick pan · wheel / LB / RB zoom · M / Y return to local view"
+
+msgid "SEASON_WINTER"
+msgstr "winter"
+
+msgid "SEASON_SPRING"
+msgstr "spring"
+
+msgid "SEASON_SUMMER"
+msgstr "summer"
+
+msgid "SEASON_AUTUMN"
+msgstr "autumn"

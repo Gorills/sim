@@ -1,8 +1,10 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/world_view.gd" id="2_view"]
 [ext_resource type="Script" path="res://scripts/world_overview.gd" id="3_overview"]
+[ext_resource type="Script" path="res://scripts/camera_controller.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/world_map_view.gd" id="5_map"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSky_main"]
 sky_top_color = Color(0.16, 0.34, 0.52, 1)
@@ -44,6 +46,9 @@ script = ExtResource("1_main")
 [node name="WorldView" type="Node3D" parent="."]
 script = ExtResource("2_view")
 
+[node name="WorldMapView" type="Node3D" parent="."]
+script = ExtResource("5_map")
+
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.737277, 0.67559, 0, -0.67559, 0.737277, 0, 22, 34)
 current = true
@@ -66,37 +71,77 @@ cast_shadow = 0
 mesh = SubResource("PlaneMesh_ocean")
 surface_material_override/0 = SubResource("OceanMat")
 
+[node name="CameraController" type="Node" parent="."]
+script = ExtResource("4_camera")
+camera_path = NodePath("../Camera3D")
+sun_path = NodePath("../DirectionalLight3D")
+
 [node name="HudLayer" type="CanvasLayer" parent="."]
 
-[node name="Hud" type="Label" parent="HudLayer"]
-unique_name_in_owner = true
-offset_left = 18.0
+[node name="HudPanel" type="PanelContainer" parent="HudLayer"]
+anchor_right = 1.0
+offset_left = 12.0
 offset_top = 12.0
-offset_right = 980.0
-offset_bottom = 210.0
-theme_override_colors/font_color = Color(0.93, 0.95, 0.96, 1)
-theme_override_colors/font_outline_color = Color(0.04, 0.06, 0.08, 1)
-theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 15
-text = "Loading simulation…"
+offset_right = -280.0
+offset_bottom = 214.0
+mouse_filter = 2
 
-[node name="Legend" type="RichTextLabel" parent="HudLayer"]
+[node name="Hud" type="Label" parent="HudLayer/HudPanel"]
 unique_name_in_owner = true
-anchors_preset = 1
+layout_mode = 2
+text = "UI_LOADING"
+autowrap_mode = 2
+vertical_alignment = 1
+
+[node name="ViewBadgePanel" type="PanelContainer" parent="HudLayer"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -92.0
+offset_top = 10.0
+offset_right = 92.0
+offset_bottom = 42.0
+mouse_filter = 2
+
+[node name="ViewBadge" type="Label" parent="HudLayer/ViewBadgePanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "UI_VIEW_LOCAL"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="LegendPanel" type="PanelContainer" parent="HudLayer"]
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -250.0
+offset_left = -260.0
 offset_top = 12.0
-offset_right = -16.0
-offset_bottom = 520.0
-bbcode_enabled = true
-fit_content = true
-scroll_active = false
-theme_override_colors/default_color = Color(0.93, 0.95, 0.96, 1)
-theme_override_font_sizes/normal_font_size = 13
-theme_override_font_sizes/bold_font_size = 14
-text = "Species"
+offset_right = -12.0
+offset_bottom = 324.0
+mouse_filter = 2
 
+[node name="Legend" type="RichTextLabel" parent="HudLayer/LegendPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+bbcode_enabled = true
+scroll_active = true
+text = "UI_LEGEND_TITLE"
+
+[node name="ControlsPanel" type="PanelContainer" parent="HudLayer"]
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -54.0
+offset_right = -12.0
+offset_bottom = -12.0
+mouse_filter = 2
+
+[node name="ControlsHint" type="Label" parent="HudLayer/ControlsPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HUD_CONTROLS_LOCAL"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
 
 [node name="WorldOverview" type="Control" parent="HudLayer"]
 unique_name_in_owner = true
