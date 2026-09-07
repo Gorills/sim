@@ -267,6 +267,8 @@ func _apply_camera() -> void:
 func _sync_render_interest(force: bool) -> void:
 	if _sim == null:
 		return
+	if _overview_mode and not force:
+		return
 
 	var stream_center := _overview_target if _overview_mode else _stream_center(_target)
 	var radius := 150.0 if _overview_mode else _local_render_radius()
