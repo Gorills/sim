@@ -56,7 +56,6 @@ func bind_sim(sim: Node, world_bounds: Rect2, spawn_position: Vector3) -> void:
 	_anchor_position = _clamp_horizontal(spawn_position)
 	_last_stream_center = Vector3.INF
 	_sync_render_interest(true)
-	_refresh_world_view()
 	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
 	_apply_camera()
 
