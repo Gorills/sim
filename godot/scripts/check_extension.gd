@@ -157,6 +157,13 @@ func _initialize() -> void:
 		and render_generation >= 0
 		and lod_total > 0
 		and lod_sum == lod_total
+		and lod_stats.has("organism_entities")
+		and lod_stats.has("updated_entities")
+		and lod_stats.has("deferred_entities")
+		and lod_stats.has("max_catchup_hours")
+		and int(lod_stats.get("updated_entities", 0)) >= 0
+		and int(lod_stats.get("deferred_entities", 0)) >= 0
+		and float(lod_stats.get("max_catchup_hours", 0.0)) >= 0.0
 	)
 	print(
 		"SIM_CHECK render_bridge_ok=",
