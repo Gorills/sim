@@ -119,6 +119,14 @@ func _process(_delta: float) -> bool:
 	camera.name = "CheckCamera"
 	viewport.add_child(camera)
 	viewport.add_child(_view)
+	var deer_id := _catalog_id(_world, "deer")
+	var bee_id := _catalog_id(_world, "bee")
+	var full_snap: Object = _world.call("get_sim_snapshot")
+	var deer_pos := _first_species_position(full_snap, deer_id)
+	if deer_pos != Vector3.INF:
+		_world.set("render_center", deer_pos)
+		_world.set("render_radius", 1200.0)
+		_world.call("refresh_render_interest")
 	_view.call("bind_sim", _world)
 	var has_terrain3d := ClassDB.class_exists("Terrain3D")
 	var uses_terrain3d := bool(_view.call("uses_terrain3d"))
@@ -139,9 +147,9 @@ func _process(_delta: float) -> bool:
 		quit(1)
 		return true
 	var snap: Object = _world.call("get_render_snapshot")
-	var deer_id := _catalog_id(_world, "deer")
-	var bee_id := _catalog_id(_world, "bee")
-	var deer_pos := _first_species_position(snap, deer_id)
+	var local_deer_pos := _first_species_position(snap, deer_id)
+	if local_deer_pos != Vector3.INF:
+		deer_pos = local_deer_pos
 	var terrain_y: float = float(_view.call("_sampled_terrain_height", deer_pos))
 	var presented: Vector3 = _view.call("_presentation_position", deer_pos, 0.0)
 	var deer_altitude: float = float(_view.call("_altitude_for_species", deer_id, 1, deer_pos.y))
