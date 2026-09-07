@@ -90,7 +90,6 @@ func teleport_to(world_position: Vector3) -> void:
 	_velocity = Vector3.ZERO
 	_anchor_position = _clamp_horizontal(world_position)
 	_sync_render_interest(true)
-	_refresh_world_view()
 	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
 	_apply_camera()
 
@@ -312,4 +311,7 @@ func _clamp_horizontal(position: Vector3) -> Vector3:
 
 
 func _camera_input_allowed() -> bool:
-	return get_viewport().gui_get_focus_owner() == null
+	return (
+		Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		and get_viewport().gui_get_focus_owner() == null
+	)
