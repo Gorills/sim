@@ -36,6 +36,11 @@ struct Entity {
     double age_hours = 0.0;
     double reproduction_cooldown_hours = 0.0;
     double behavior_timer_hours = 0.0;
+
+    // Last world ecology step applied to this organism. Simulation LOD can
+    // defer work for a region, then advance the entity by the exact accumulated
+    // simulated interval when that region becomes due again.
+    std::uint64_t last_ecology_tick = 0;
 };
 
 } // namespace sim
