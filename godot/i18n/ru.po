@@ -16,14 +16,8 @@ msgstr "GDExtension не загружен. Соберите sim_godot и пер�
 msgid "UI_LEGEND_TITLE"
 msgstr "Виды"
 
-msgid "UI_WORLD_OVERVIEW_TITLE"
-msgstr "обзор мира · красные хищники / бежевые травоядные / оранжевые всеядные"
-
-msgid "UI_VIEW_LOCAL"
-msgstr "ЛОКАЛЬНЫЙ ВИД"
-
-msgid "UI_VIEW_MAP"
-msgstr "КАРТА МИРА"
+msgid "UI_VIEW_GOD"
+msgstr "РЕЖИМ БОГА"
 
 msgid "HUD_SIMULATION"
 msgstr "день %.2f · %s · %s · %.0fx · сущностей %s · %s"
@@ -49,11 +43,8 @@ msgstr "идёт"
 msgid "HUD_PAUSED"
 msgstr "пауза"
 
-msgid "HUD_CONTROLS_LOCAL"
-msgstr "WASD / левый стик — движение · колесо / LB / RB — масштаб · ПКМ / правый стик — орбита · M / Y — карта мира · Space / Start — пауза · 1/2/3 — скорость"
-
-msgid "HUD_CONTROLS_MAP"
-msgstr "WASD / левый стик — перемещение · колесо / LB / RB — масштаб · M / Y — вернуться к локальному виду"
+msgid "HUD_CONTROLS_GOD"
+msgstr "WASD / левый стик — полёт · Q/E / LB/RB — вниз/вверх · ПКМ / правый стик — обзор · колесо — скорость камеры · Shift / L3 — ускорение · Space / Start — пауза · 1/2/3 — скорость симуляции"
 
 msgid "SEASON_WINTER"
 msgstr "зима"
