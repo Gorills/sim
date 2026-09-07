@@ -19,7 +19,9 @@ using namespace godot;
 
 namespace {
 
-constexpr double kEcologyHoursPerRealSecond = 0.25;
+// Third-person 1x is an observation pace, not a 15-minute-per-second timelapse.
+// One simulated minute per real second keeps meter-scale animal locomotion readable.
+constexpr double kEcologyHoursPerRealSecond = 1.0 / 60.0;
 
 PackedFloat32Array to_packed_floats(const std::vector<double>& values) {
     PackedFloat32Array out;
