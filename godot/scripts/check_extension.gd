@@ -117,6 +117,37 @@ func _initialize() -> void:
 	world.set("render_radius", EXPECTED_RENDER_RADIUS)
 	world.call("refresh_render_interest")
 
+	var render_bridge_ok := (
+		world.has_method("get_current_render_snapshot")
+		and world.has_method("get_render_alpha")
+	)
+	var current_render_snapshot: Object = (
+		world.call("get_current_render_snapshot")
+		if render_bridge_ok
+		else null
+	)
+	var render_alpha := (
+		float(world.call("get_render_alpha"))
+		if render_bridge_ok
+		else -1.0
+	)
+	render_bridge_ok = (
+		render_bridge_ok
+		and current_render_snapshot != null
+		and render_alpha >= 0.0
+		and render_alpha <= 1.0
+	)
+	print(
+		"SIM_CHECK render_bridge_ok=",
+		render_bridge_ok,
+		" alpha=",
+		render_alpha
+	)
+	if not render_bridge_ok:
+		world.free()
+		quit(1)
+		return
+
 	var viewport := SubViewport.new()
 	viewport.name = "PlayerScaleCheckViewport"
 	viewport.own_world_3d = true
@@ -271,7 +302,8 @@ func _check_ui_contracts() -> bool:
 	var keyboard_mouse_ok := (
 		_action_has_key(Actions.CAMERA_MOVE_FORWARD)
 		and _action_has_key(Actions.CAMERA_MOVE_UP)
-		and _action_has_mouse(Actions.CAMERA_LOOK_DRAG)
+		and _action_has_mouse(Actions.CAMERA_LOOK_CAPTURE)
+		and _action_has_key(Actions.CAMERA_LOOK_RELEASE)
 		and _action_has_mouse(Actions.CAMERA_SPEED_INCREASE)
 		and _action_has_key(Actions.CAMERA_SPEED_BOOST)
 	)
