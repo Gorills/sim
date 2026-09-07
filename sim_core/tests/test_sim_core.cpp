@@ -413,6 +413,79 @@ void test_default_island_scale_and_habitat_snapshot() {
     CHECK(total == 9'017);
 }
 
+void test_food_linked_seeding_preserves_consumer_habitat() {
+    sim::WorldConfig config;
+    config.habitat.width = 16;
+    config.habitat.height = 16;
+    config.habitat.cell_size = 1.0;
+    config.habitat.origin = {-8.0, 0.0, -8.0};
+    config.bounds_min = {-8.0, 0.0, -8.0};
+    config.bounds_max = {8.0, 8.0, 8.0};
+
+    sim::SpeciesCatalog catalog;
+    sim::SpeciesDefinition food;
+    food.id = sim::species::grass;
+    food.key = "dry_food";
+    food.display_name = "Dry food";
+    food.kind = sim::EntityKind::plant;
+    food.initial_biomass = 1.0;
+    food.max_biomass = 2.0;
+    food.preferred_moisture = 0.2;
+    food.moisture_tolerance = 0.02;
+    food.preferred_temperature = 18.0;
+    food.temperature_tolerance = 100.0;
+    CHECK(catalog.add(food));
+
+    sim::SpeciesDefinition consumer;
+    consumer.id = sim::species::rabbit;
+    consumer.key = "wet_consumer";
+    consumer.display_name = "Wet consumer";
+    consumer.kind = sim::EntityKind::herbivore;
+    consumer.food_species = {sim::species::grass};
+    consumer.initial_biomass = 1.0;
+    consumer.max_biomass = 2.0;
+    consumer.initial_energy = 1.0;
+    consumer.max_energy = 2.0;
+    consumer.preferred_moisture = 0.9;
+    consumer.moisture_tolerance = 0.02;
+    consumer.preferred_temperature = 18.0;
+    consumer.temperature_tolerance = 100.0;
+    consumer.home_range_radius = 1.0;
+    CHECK(catalog.add(consumer));
+
+    sim::World world(config, std::move(catalog));
+    for (std::size_t z = 0; z < config.habitat.height; ++z) {
+        for (std::size_t x = 0; x < config.habitat.width; ++x) {
+            sim::HabitatCell& cell = world.habitat().cell(x, z);
+            cell.water = false;
+            cell.fresh_water = false;
+            cell.temperature = 18.0;
+            cell.moisture = x <= 6 ? 0.2 : (x >= 10 ? 0.9 : 0.5);
+        }
+    }
+
+    sim::IslandScenarioConfig island = empty_island_populations();
+    island.seed = 91;
+    island.grass = 1;
+    island.rabbit = 1;
+    const sim::ScenarioSeedResult seeded = sim::seed_temperate_island(world, island);
+    CHECK(seeded.complete());
+
+    std::optional<sim::Vec3> consumer_position;
+    for (const sim::EntityState& entity : world.snapshot().entities) {
+        if (entity.species_id == sim::species::rabbit) {
+            consumer_position = entity.position;
+            break;
+        }
+    }
+    CHECK(consumer_position.has_value());
+    if (consumer_position.has_value()) {
+        const sim::HabitatCell* cell = world.habitat().cell_at(*consumer_position);
+        CHECK(cell != nullptr);
+        CHECK(cell == nullptr || cell->moisture == 0.9);
+    }
+}
+
 void test_consumers_seed_near_existing_food() {
     sim::World world;
     sim::IslandScenarioConfig island = empty_island_populations();
@@ -889,6 +962,7 @@ int main() {
     test_habitat_large_steps_cover_full_interval();
     test_species_catalog_data_driven_web();
     test_default_island_scale_and_habitat_snapshot();
+    test_food_linked_seeding_preserves_consumer_habitat();
     test_consumers_seed_near_existing_food();
     test_interest_snapshots_and_overview();
     test_biome_layers_affect_dynamics();
