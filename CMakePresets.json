@@ -36,28 +36,64 @@
         "SIM_ENABLE_SANITIZERS": "OFF",
         "SIM_FETCH_GODOT_CPP": "ON"
       }
+    },
+    {
+      "name": "ci-godot",
+      "displayName": "CI GDExtension only (trimmed godot-cpp)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ci-godot",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++-13",
+        "SIM_BUILD_TESTS": "OFF",
+        "SIM_BUILD_CLI": "OFF",
+        "SIM_ENABLE_SANITIZERS": "OFF",
+        "SIM_FETCH_GODOT_CPP": "ON",
+        "GODOTCPP_BUILD_PROFILE": "${sourceDir}/sim_godot/godot_cpp_build_profile.json",
+        "GODOTCPP_USE_HOT_RELOAD": "OFF",
+        "GODOTCPP_GENERATE_TEMPLATE_GET_NODE": "OFF"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "debug", "configurePreset": "debug" },
-    { "name": "release", "configurePreset": "release" },
-    { "name": "debug-godot", "configurePreset": "debug-godot" }
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "debug-godot",
+      "configurePreset": "debug-godot"
+    },
+    {
+      "name": "ci-godot",
+      "configurePreset": "ci-godot"
+    }
   ],
   "testPresets": [
     {
       "name": "debug",
       "configurePreset": "debug",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "release",
       "configurePreset": "release",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     },
     {
       "name": "debug-godot",
       "configurePreset": "debug-godot",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }
