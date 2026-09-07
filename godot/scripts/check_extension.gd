@@ -1,6 +1,8 @@
 extends SceneTree
 
-## Headless smoke check that the GDExtension registered SimWorld.
+## Headless smoke check that the GDExtension and visualization contracts work.
+
+const Actions = preload("res://scripts/input_actions.gd")
 
 var _world: Node
 var _view: Node3D
@@ -8,6 +10,10 @@ var _checked_view := false
 
 
 func _initialize() -> void:
+	if not _check_ui_contracts():
+		quit(1)
+		return
+
 	var has_world := ClassDB.class_exists("SimWorld")
 	var has_snap := ClassDB.class_exists("SimSnapshot")
 	var has_entity := ClassDB.class_exists("SimEntityState")
@@ -146,6 +152,25 @@ func _process(_delta: float) -> bool:
 		_world.free()
 		quit(1)
 		return true
+
+	var region_size := int(_view.call("terrain3d_region_size"))
+	var region_count := int(_view.call("terrain3d_region_count"))
+	var terrain_streaming_ok := region_size == 64 and region_count >= 1 and region_count <= 4
+	print(
+		"SIM_CHECK terrain_streaming_ok=",
+		terrain_streaming_ok,
+		" region_size=",
+		region_size,
+		" active_regions=",
+		region_count
+	)
+	if not terrain_streaming_ok:
+		push_error("Terrain3D must use 64-vertex regions and keep the 1.2 km interest window bounded.")
+		_view.free()
+		_world.free()
+		quit(1)
+		return true
+
 	var snap: Object = _world.call("get_render_snapshot")
 	var local_deer_pos := _first_species_position(snap, deer_id)
 	if local_deer_pos != Vector3.INF:
@@ -180,15 +205,132 @@ func _process(_delta: float) -> bool:
 		" bee_fly=",
 		bee_fly
 	)
-	_view.free()
 	if not grounded_ok:
-		push_error("Grounded organisms are not sitting on the island surface.")
+		_view.free()
 		_world.free()
 		quit(1)
 		return true
+
+	_world.set("render_center", Vector3(-6000.0, 0.0, -6000.0))
+	_world.set("render_radius", 1200.0)
+	_world.call("refresh_render_interest")
+	_view.call("_refresh_terrain", true)
+	var moved_region_count := int(_view.call("terrain3d_region_count"))
+	var unload_ok := moved_region_count >= 1 and moved_region_count <= 4
+	print(
+		"SIM_CHECK terrain_unload_ok=",
+		unload_ok,
+		" active_regions_after_move=",
+		moved_region_count
+	)
+	if not unload_ok:
+		push_error("Terrain3D active regions accumulated after moving the render-interest window.")
+		_view.free()
+		_world.free()
+		quit(1)
+		return true
+
+	var map_view := Node3D.new()
+	map_view.set_script(load("res://scripts/world_map_view.gd"))
+	viewport.add_child(map_view)
+	map_view.call("bind_sim", _world)
+	map_view.call("set_active", true)
+	var map_ok := bool(map_view.call("has_map_mesh"))
+	print("SIM_CHECK coarse_world_map_ok=", map_ok)
+	map_view.free()
+	_view.free()
+	if not map_ok:
+		push_error("Coarse whole-world map failed to build from overview data.")
+		_world.free()
+		quit(1)
+		return true
+
 	_world.free()
 	quit(0)
 	return true
+
+
+func _check_ui_contracts() -> bool:
+	var missing_actions := PackedStringArray()
+	var empty_actions := PackedStringArray()
+	for action in Actions.required_actions():
+		if not InputMap.has_action(action):
+			missing_actions.append(action)
+		elif InputMap.action_get_events(action).is_empty():
+			empty_actions.append(action)
+
+	var keyboard_mouse_ok := (
+		_action_has_key(Actions.CAMERA_MOVE_FORWARD)
+		and _action_has_key(Actions.CAMERA_MOVE_BACK)
+		and _action_has_mouse(Actions.CAMERA_ORBIT_DRAG)
+		and _action_has_mouse(Actions.CAMERA_ZOOM_IN)
+	)
+	var gamepad_ok := (
+		_action_has_joy(Actions.CAMERA_MOVE_LEFT)
+		and _action_has_joy(Actions.CAMERA_MOVE_FORWARD)
+		and _action_has_joy(Actions.CAMERA_ORBIT_LEFT)
+		and _action_has_joy(Actions.CAMERA_ORBIT_UP)
+		and _action_has_joy(Actions.CAMERA_ZOOM_IN)
+		and _action_has_joy(Actions.VIEW_TOGGLE_OVERVIEW)
+		and _action_has_joy(Actions.SIM_TOGGLE_PAUSE)
+	)
+
+	var theme := load("res://ui/sim_theme.tres") as Theme
+	var theme_ok := theme != null
+
+	var previous_locale := TranslationServer.get_locale()
+	TranslationServer.set_locale("ru")
+	var translation_ok := str(TranslationServer.translate("UI_VIEW_MAP")) == "КАРТА МИРА"
+	TranslationServer.set_locale(previous_locale)
+
+	var ok := (
+		missing_actions.is_empty()
+		and empty_actions.is_empty()
+		and keyboard_mouse_ok
+		and gamepad_ok
+		and theme_ok
+		and translation_ok
+	)
+	print(
+		"SIM_CHECK ui_contracts_ok=",
+		ok,
+		" missing_actions=",
+		missing_actions,
+		" empty_actions=",
+		empty_actions,
+		" keyboard_mouse=",
+		keyboard_mouse_ok,
+		" gamepad=",
+		gamepad_ok,
+		" theme=",
+		theme_ok,
+		" translation=",
+		translation_ok
+	)
+	if not ok:
+		push_error("Visualization input, theme, or localization contract is incomplete.")
+	return ok
+
+
+func _action_has_key(action: StringName) -> bool:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventKey:
+			return true
+	return false
+
+
+func _action_has_mouse(action: StringName) -> bool:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventMouseButton:
+			return true
+	return false
+
+
+func _action_has_joy(action: StringName) -> bool:
+	for event in InputMap.action_get_events(action):
+		if event is InputEventJoypadMotion or event is InputEventJoypadButton:
+			return true
+	return false
 
 
 func _scene_has_mesh(node: Node) -> bool:
