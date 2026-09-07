@@ -18,8 +18,8 @@ namespace sim {
 struct WorldConfig {
     double tick_dt = 1.0 / 60.0;
     double ecology_hours_per_tick = 1.0 / 60.0;
-    Vec3 bounds_min{-24.0, 0.0, -24.0};
-    Vec3 bounds_max{24.0, 8.0, 24.0};
+    Vec3 bounds_min{-9'600.0, 0.0, -9'600.0};
+    Vec3 bounds_max{9'600.0, 500.0, 9'600.0};
     HabitatConfig habitat{};
     ClimateConfig climate{};
     double climate_start_hour = 24.0 * 120.0 + 8.0;
