@@ -110,12 +110,21 @@ inline constexpr SpeciesId deer = 11;
 inline constexpr SpeciesId mouse = 12;
 inline constexpr SpeciesId hare = 13;
 inline constexpr SpeciesId boar = 14;
+inline constexpr SpeciesId wildflower = 15;
+inline constexpr SpeciesId willow = 16;
+inline constexpr SpeciesId vole = 17;
+inline constexpr SpeciesId hedgehog = 18;
+inline constexpr SpeciesId robin = 19;
 inline constexpr SpeciesId wolf = 20;
 inline constexpr SpeciesId fox = 21;
+inline constexpr SpeciesId owl = 22;
+inline constexpr SpeciesId frog = 23;
 inline constexpr SpeciesId bee = 30;
 inline constexpr SpeciesId butterfly = 31;
 inline constexpr SpeciesId beetle = 32;
 inline constexpr SpeciesId ant = 33;
+inline constexpr SpeciesId bumblebee = 34;
+inline constexpr SpeciesId moth = 35;
 } // namespace species
 
 [[nodiscard]] constexpr bool is_animal(EntityKind kind) noexcept {
