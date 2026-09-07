@@ -31,9 +31,6 @@ double sane_ecology_step(double value) {
 
 SimulationRuntime::SimulationRuntime(std::unique_ptr<World> world, RuntimeOptions options)
     : world_(std::move(world)),
-      lod_grid_(world_ ? world_->config().bounds_min : Vec3{},
-                world_ ? world_->config().bounds_max : Vec3{1.0, 1.0, 1.0},
-                options.lod),
       paused_(world_ ? world_->paused() : false),
       speed_scale_(sane_speed(options.speed_scale)),
       tick_dt_(world_ ? world_->tick_dt() : 1.0 / 60.0),
@@ -41,6 +38,10 @@ SimulationRuntime::SimulationRuntime(std::unique_ptr<World> world, RuntimeOption
       render_center_(options.render_center),
       render_radius_(std::max(1.0, options.render_radius)),
       overview_resolution_(std::max<std::size_t>(1, options.overview_resolution)) {
+    if (world_) {
+        world_->configure_simulation_lod(
+            options.lod, render_center_, options.simulation_lod_enabled);
+    }
     publish_initial();
 }
 
@@ -197,7 +198,8 @@ void SimulationRuntime::publish_initial() {
     working_.render_center = render_center_;
     working_.render_radius = render_radius_;
     working_.render_generation = render_generation_;
-    working_.lod_summary = lod_grid_.summary(render_center_, working_.tick);
+    working_.lod_summary = world_->simulation_lod_summary();
+    working_.simulation_work = world_->simulation_work_stats();
 
     last_stats_refresh_ = now;
     last_full_snapshot_refresh_ = now;
@@ -235,6 +237,7 @@ bool SimulationRuntime::process_commands() {
         case CommandKind::render_interest:
             render_center_ = command.vector_value;
             render_radius_ = command.first;
+            world_->set_simulation_observer(render_center_);
             render_habitat_dirty_ = render_habitat_dirty_ || command.bool_value;
             refresh_render_interest();
             publication_dirty = true;
@@ -334,7 +337,8 @@ void SimulationRuntime::publish(Clock::time_point now, bool tick_advanced) {
     working_.render_center = render_center_;
     working_.render_radius = render_radius_;
     working_.render_generation = render_generation_;
-    working_.lod_summary = lod_grid_.summary(render_center_, working_.tick);
+    working_.lod_summary = world_->simulation_lod_summary();
+    working_.simulation_work = world_->simulation_work_stats();
     if (tick_advanced) {
         last_tick_wall_seconds_.store(wall_seconds(now));
     }
