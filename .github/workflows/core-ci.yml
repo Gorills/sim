@@ -47,7 +47,6 @@ jobs:
     env:
       GODOT_VERSION: "4.5.1"
       GODOT_CPP_TAG: "godot-4.5-stable"
-      TERRAIN3D_TAG: "v1.0.2-stable"
       SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
       SCCACHE_CACHE_SIZE: "1G"
     steps:
@@ -94,17 +93,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/godot-$GODOT_VERSION"
           curl -fsSL "https://godot-releases.nbg1.your-objectstorage.com/$GODOT_VERSION-stable/Godot_v$GODOT_VERSION-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
           unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-$GODOT_VERSION"
-
-      - name: Restore Terrain3D
-        id: terrain3d
-        uses: actions/cache@v6.1.0
-        with:
-          path: godot/addons/terrain_3d
-          key: terrain3d-v1-${{ runner.os }}-${{ env.TERRAIN3D_TAG }}
-
-      - name: Fetch Terrain3D
-        if: steps.terrain3d.outputs.cache-hit != 'true'
-        run: scripts/fetch_terrain3d.sh "$TERRAIN3D_TAG"
 
       - name: Import Godot project
         run: |
