@@ -44,10 +44,13 @@ subdivided four times for presentation. At a 450 m render radius this remains a
 small mesh while avoiding the visibly huge triangles that were acceptable only
 from an aerial camera.
 
-Terrain rebuilds occur only when render interest moves or the view is reset.
-There is no timer-driven full SurfaceTool/normal regeneration in steady state.
-The clean-checkout CI no longer downloads Terrain3D, which verifies that the
-player view has no hidden runtime dependency on it.
+Terrain rebuilds occur only after the simulation worker publishes a completed
+render-interest generation or the view is reset. Camera movement never waits for
+snapshot or habitat extraction: the old ready region remains visible until the
+new region is published. There is no timer-driven full SurfaceTool/normal
+regeneration in steady state. The clean-checkout CI no longer downloads
+Terrain3D, which verifies that the player view has no hidden runtime dependency
+on it.
 
 ## Organism presentation
 
@@ -65,18 +68,26 @@ removing the former 20 FPS presentation cap.
 
 ## Simulation/render decoupling
 
-The island contains roughly nine thousand initial organisms. Running full
-ecology at 60 Hz needlessly performs habitat, canopy, plant, spatial-index, and
-animal updates sixty times per second.
+The island contains roughly nine thousand initial organisms. `sim_core` now
+owns the mutable `World` inside `SimulationRuntime` on a dedicated worker
+thread. Godot does not call `World::tick()`, habitat scans, ecosystem-stat
+scans, or overview aggregation from its frame loop. It consumes immutable
+published `RuntimeFrame` data instead.
 
-The visualizer runs ecology at 20 Hz. `SimWorld::set_tick_hz()` scales
-`ecology_hours_per_tick` with the tick interval. At 1x, one real second advances
-one simulated minute. This is intentionally slower than the former 15 simulated
-minutes per real second: meter-scale animal movement was otherwise presented at
-tens of metres per second and could not read as third-person locomotion.
+The visualizer requests 20 Hz simulation timing. At 1x, one real second advances
+one simulated minute. Simulation speed controls 1x / 4x / 16x remain unchanged;
+faster modes change worker simulation cadence without making the Godot frame
+loop execute catch-up ticks.
 
-Simulation speed controls 1x / 4x / 16x remain unchanged; 4x and 16x are explicit
-time-lapse modes.
+The core also owns a fixed simulation-region grid and a phased LOD scheduler.
+The default 600 m regions are classified as individual, cohort, or aggregate
+around the simulation observer, with lower-frequency regions distributed across
+tick phases to avoid synchronized work spikes. This change establishes the
+scheduler and published LOD contract only: the current ecological equations
+still use the existing individual `World::tick()` representation. Cohort and
+aggregate state, conservation-preserving promotion/demotion, and LOD-specific
+ecology updates are the next simulation-core layer; they must not be inferred
+from the scheduler alone.
 
 ## Debug minimap
 
@@ -88,9 +99,10 @@ information are baked into a tiny ImageTexture, while the current camera marker
 redraws independently.
 
 A left click maps the minimap pixel to world X/Z and calls
-`camera_controller.teleport_to()`. Teleport immediately moves render interest,
-rebuilds the local terrain around the destination, places the avatar above that
-surface, and preserves the third-person camera scale.
+`camera_controller.teleport_to()`. Teleport moves the avatar immediately and
+queues new render interest. The previous ready terrain remains present while the
+simulation worker prepares the destination snapshot/habitat; `world_view.gd`
+switches only when the completed render generation is published.
 
 ## Input contract
 
@@ -114,7 +126,8 @@ semantic actions from `godot/scripts/input_actions.gd`.
 `godot/scripts/check_extension.gd` verifies:
 
 - semantic KBM/gamepad bindings and localization;
-- render snapshot/alpha bridge required by render-rate interpolation;
+- immutable render snapshot/alpha/generation bridge used by the async runtime;
+- simulation LOD region accounting (individual + cohort + aggregate = total);
 - 20 Hz simulation timing with the one-simulated-minute-per-real-second 1x rate;
 - an inhabited land spawn from the aggregated overview;
 - perspective third-person camera distance near 7 m;
