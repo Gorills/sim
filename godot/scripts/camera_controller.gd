@@ -31,10 +31,10 @@ const SHADOW_DISTANCE := 350.0
 @export var avatar_path: NodePath
 @export var world_view_path: NodePath
 
-@onready var _camera: Camera3D = get_node(camera_path) as Camera3D
-@onready var _sun: DirectionalLight3D = get_node(sun_path) as DirectionalLight3D
-@onready var _avatar: Node3D = get_node(avatar_path) as Node3D
-@onready var _world_view: Node = get_node(world_view_path)
+var _camera: Camera3D
+var _sun: DirectionalLight3D
+var _avatar: Node3D
+var _world_view: Node
 
 var _sim: Node
 var _world_bounds := Rect2(Vector2(-9600.0, -9600.0), Vector2(19200.0, 19200.0))
@@ -47,6 +47,10 @@ var _last_stream_center := Vector3.INF
 
 
 func bind_sim(sim: Node, world_bounds: Rect2, spawn_position: Vector3) -> void:
+	_resolve_nodes()
+	if _camera == null or _avatar == null or _world_view == null:
+		push_error("CameraController paths are not resolved.")
+		return
 	_sim = sim
 	set_world_bounds(world_bounds)
 	_velocity = Vector3.ZERO
@@ -58,6 +62,13 @@ func bind_sim(sim: Node, world_bounds: Rect2, spawn_position: Vector3) -> void:
 	_sync_render_interest(true)
 	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
 	_apply_camera()
+
+
+func _resolve_nodes() -> void:
+	_camera = get_node_or_null(camera_path) as Camera3D
+	_sun = get_node_or_null(sun_path) as DirectionalLight3D
+	_avatar = get_node_or_null(avatar_path) as Node3D
+	_world_view = get_node_or_null(world_view_path)
 
 
 func set_world_bounds(world_bounds: Rect2) -> void:
