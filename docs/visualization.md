@@ -74,23 +74,28 @@ Source:
 
 ## Localization
 
-UI source strings live in `godot/i18n/ui.csv`. Code and scenes use stable
-message IDs such as `HUD_SIMULATION` and `UI_VIEW_MAP`, never English prose
-as lookup keys. The CSV is imported by Godot into locale-specific Translation
-resources listed in `project.godot`.
+UI source strings live in versioned gettext catalogs under `godot/i18n/`.
+Code and scenes use stable message IDs such as `HUD_SIMULATION` and
+`UI_VIEW_MAP`, never English prose as lookup keys. `project.godot` loads the
+`en.po` and `ru.po` catalogs directly and explicitly falls back to English.
+
+PO is used instead of generated CSV `*.translation` binaries so a clean
+checkout has no localization bootstrap dependency, works cleanly in CI, and can
+grow into gettext contexts and plural forms without changing the runtime
+contract.
 
 When adding interface text:
 
-1. add one stable ID to the CSV;
-2. add all supported locale columns in the same row;
+1. add one stable ID to every locale catalog;
+2. keep placeholders semantically equivalent between locales;
 3. use `tr("ID")` for dynamic text or the ID as the Control text for
    auto-translated static text.
 
 Source:
 - Godot internationalization:
   https://docs.godotengine.org/en/4.5/tutorials/i18n/internationalizing_games.html
-- Godot translation import:
-  https://docs.godotengine.org/en/4.5/tutorials/assets_pipeline/importing_translations.html
+- Godot gettext localization:
+  https://docs.godotengine.org/en/4.5/tutorials/i18n/localization_using_gettext.html
 
 ## UI design system
 
