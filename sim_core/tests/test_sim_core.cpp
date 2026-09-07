@@ -489,8 +489,10 @@ void test_prey_flees_from_a_nearby_predator() {
     sim::Vec3 wolf_at{};
     bool placed = false;
     for (std::size_t z = 2; z < 18 && !placed; ++z) {
-        for (std::size_t x = 2; x + 3 < 18 && !placed; ++x) {
-            if (!world.habitat().cell(x, z).water &&
+        for (std::size_t x = 4; x + 3 < 18 && !placed; ++x) {
+            if (!world.habitat().cell(x - 2, z).water &&
+                !world.habitat().cell(x - 1, z).water &&
+                !world.habitat().cell(x, z).water &&
                 !world.habitat().cell(x + 1, z).water &&
                 !world.habitat().cell(x + 2, z).water &&
                 !world.habitat().cell(x + 3, z).water) {
