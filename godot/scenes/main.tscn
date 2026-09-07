@@ -2,9 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/world_view.gd" id="2_view"]
-[ext_resource type="Script" path="res://scripts/world_overview.gd" id="3_overview"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="4_camera"]
-[ext_resource type="Script" path="res://scripts/world_map_view.gd" id="5_map"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSky_main"]
 sky_top_color = Color(0.16, 0.34, 0.52, 1)
@@ -46,9 +44,6 @@ script = ExtResource("1_main")
 [node name="WorldView" type="Node3D" parent="."]
 script = ExtResource("2_view")
 
-[node name="WorldMapView" type="Node3D" parent="."]
-script = ExtResource("5_map")
-
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.737277, 0.67559, 0, -0.67559, 0.737277, 0, 22, 34)
 current = true
@@ -59,7 +54,7 @@ transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0
 light_color = Color(1, 0.91, 0.76, 1)
 light_energy = 1.05
 shadow_enabled = true
-directional_shadow_max_distance = 4000.0
+directional_shadow_max_distance = 1800.0
 directional_shadow_fade_start = 0.8
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -105,7 +100,7 @@ mouse_filter = 2
 [node name="ViewBadge" type="Label" parent="HudLayer/ViewBadgePanel"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "UI_VIEW_LOCAL"
+text = "UI_VIEW_GOD"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -138,16 +133,8 @@ mouse_filter = 2
 [node name="ControlsHint" type="Label" parent="HudLayer/ControlsPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "HUD_CONTROLS_LOCAL"
+text = "HUD_CONTROLS_GOD"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="WorldOverview" type="Control" parent="HudLayer"]
-unique_name_in_owner = true
-layout_mode = 3
-anchors_preset = 0
-offset_right = 360.0
-offset_bottom = 360.0
-mouse_filter = 2
-script = ExtResource("3_overview")

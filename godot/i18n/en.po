@@ -16,14 +16,8 @@ msgstr "GDExtension not loaded. Build sim_godot and restart Godot."
 msgid "UI_LEGEND_TITLE"
 msgstr "Species"
 
-msgid "UI_WORLD_OVERVIEW_TITLE"
-msgstr "world overview · red predators / tan herbivores / orange omnivores"
-
-msgid "UI_VIEW_LOCAL"
-msgstr "LOCAL VIEW"
-
-msgid "UI_VIEW_MAP"
-msgstr "WORLD MAP"
+msgid "UI_VIEW_GOD"
+msgstr "GOD VIEW"
 
 msgid "HUD_SIMULATION"
 msgstr "day %.2f · %s · %s · %.0fx · entities %s · %s"
@@ -49,11 +43,8 @@ msgstr "running"
 msgid "HUD_PAUSED"
 msgstr "paused"
 
-msgid "HUD_CONTROLS_LOCAL"
-msgstr "WASD / left stick move · wheel / LB / RB zoom · RMB / right stick orbit · M / Y world map · Space / Start pause · 1/2/3 speed"
-
-msgid "HUD_CONTROLS_MAP"
-msgstr "WASD / left stick pan · wheel / LB / RB zoom · M / Y return to local view"
+msgid "HUD_CONTROLS_GOD"
+msgstr "WASD / left stick fly · Q/E / LB/RB down/up · RMB / right stick look · wheel changes camera speed · Shift / L3 boost · Space / Start pause · 1/2/3 simulation speed"
 
 msgid "SEASON_WINTER"
 msgstr "winter"
