@@ -196,6 +196,7 @@ void SimulationRuntime::publish_initial() {
     working_.paused = world_->paused();
     working_.render_center = render_center_;
     working_.render_radius = render_radius_;
+    working_.render_generation = render_generation_;
     working_.lod_summary = lod_grid_.summary(render_center_, working_.tick);
 
     last_stats_refresh_ = now;
@@ -290,6 +291,8 @@ void SimulationRuntime::refresh_render_interest() {
     }
     working_.render_center = render_center_;
     working_.render_radius = render_radius_;
+    ++render_generation_;
+    working_.render_generation = render_generation_;
 }
 
 void SimulationRuntime::refresh_overview() {
@@ -330,6 +333,7 @@ void SimulationRuntime::publish(Clock::time_point now, bool tick_advanced) {
     working_.paused = world_->paused();
     working_.render_center = render_center_;
     working_.render_radius = render_radius_;
+    working_.render_generation = render_generation_;
     working_.lod_summary = lod_grid_.summary(render_center_, working_.tick);
     if (tick_advanced) {
         last_tick_wall_seconds_.store(wall_seconds(now));
