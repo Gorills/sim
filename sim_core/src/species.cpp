@@ -504,7 +504,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         wolf_def.hunt_speed_multiplier = 1.8;
         wolf_def.activity_peak_hour = 21.0;
         wolf_def.active_hours_per_day = 15.0;
-        wolf_def.initial_group_size = 2;
+        wolf_def.initial_group_size = 4;
         add_scaled_species(catalog, std::move(wolf_def));
     }
 
