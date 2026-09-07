@@ -94,14 +94,6 @@ jobs:
           curl -fsSL "https://godot-releases.nbg1.your-objectstorage.com/$GODOT_VERSION-stable/Godot_v$GODOT_VERSION-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
           unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-$GODOT_VERSION"
 
-      - name: Restore imported Godot assets
-        uses: actions/cache@v6.1.0
-        with:
-          path: godot/.godot/imported
-          key: godot-import-v1-${{ runner.os }}-${{ env.GODOT_VERSION }}-${{ hashFiles('godot/assets/**', 'godot/project.godot') }}
-          restore-keys: |
-            godot-import-v1-${{ runner.os }}-${{ env.GODOT_VERSION }}-
-
       - name: Import Godot project
         run: |
           GODOT="$RUNNER_TEMP/godot-$GODOT_VERSION/Godot_v$GODOT_VERSION-stable_linux.x86_64"
