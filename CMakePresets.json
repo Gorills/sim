@@ -1,0 +1,63 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug (core + tests + CLI, sanitizers)",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SIM_BUILD_TESTS": "ON",
+        "SIM_BUILD_CLI": "ON",
+        "SIM_ENABLE_SANITIZERS": "ON",
+        "SIM_FETCH_GODOT_CPP": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (core + CLI)",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SIM_BUILD_TESTS": "ON",
+        "SIM_BUILD_CLI": "ON",
+        "SIM_ENABLE_SANITIZERS": "OFF",
+        "SIM_FETCH_GODOT_CPP": "OFF"
+      }
+    },
+    {
+      "name": "debug-godot",
+      "displayName": "Debug + GDExtension (fetches godot-cpp)",
+      "binaryDir": "${sourceDir}/build/debug-godot",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SIM_BUILD_TESTS": "ON",
+        "SIM_BUILD_CLI": "ON",
+        "SIM_ENABLE_SANITIZERS": "OFF",
+        "SIM_FETCH_GODOT_CPP": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "debug-godot", "configurePreset": "debug-godot" }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "debug-godot",
+      "configurePreset": "debug-godot",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

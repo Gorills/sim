@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "harness": {
+      "type": "stdio",
+      "command": "/home/gorills/.local/share/uv/tools/harness/bin/python",
+      "args": [
+        "-m",
+        "harness.mcp_process"
+      ],
+      "env": {
+        "HARNESS_HOST_PROFILE": "cursor",
+        "HARNESS_WORKSPACE_ROOT": "/home/gorills/projects/sim"
+      }
+    },
+    "blender": {
+      "type": "stdio",
+      "command": "/home/gorills/.local/bin/blender-mcp",
+      "env": {
+        "BLENDER_PATH": "/home/gorills/.local/opt/blender-5.2.0-linux-x64/blender",
+        "BLENDER_MCP_HOST": "localhost",
+        "BLENDER_MCP_PORT": "9876"
+      }
+    }
+  }
+}

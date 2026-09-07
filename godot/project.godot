@@ -1,0 +1,20 @@
+; Engine configuration file.
+; https://docs.godotengine.org/en/4.5/classes/class_projectsettings.html
+config_version=5
+
+[application]
+config/name="Sim"
+config/description="Godot visualizer for the C++ world simulation (sim_core via GDExtension)"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://icon.svg"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+renderer/rendering_method="forward_plus"
+anti_aliasing/quality/msaa_3d=2

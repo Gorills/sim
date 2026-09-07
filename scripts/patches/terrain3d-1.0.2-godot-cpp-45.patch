@@ -1,0 +1,70 @@
+diff --git a/src/terrain_3d_data.cpp b/src/terrain_3d_data.cpp
+index 8aade21..5c94c8a 100644
+--- a/src/terrain_3d_data.cpp
++++ b/src/terrain_3d_data.cpp
+@@ -113,7 +113,7 @@ void Terrain3DData::do_for_regions(const Rect2i &p_area, const Callable &p_callb
+ 
+ void Terrain3DData::change_region_size(int p_new_size) {
+ 	LOG(INFO, "Changing region size from: ", _region_size, " to ", p_new_size);
+-	if (p_new_size < 64 || p_new_size > 2048 || !is_power_of_2(p_new_size)) {
++	if (p_new_size < 64 || p_new_size > 2048 || !t3d_is_power_of_2(p_new_size)) {
+ 		LOG(ERROR, "Invalid region size: ", p_new_size, ". Must be 64, 128, 256, 512, 1024, 2048");
+ 		return;
+ 	}
+diff --git a/src/terrain_3d_region.cpp b/src/terrain_3d_region.cpp
+index 52134de..2e5cc14 100644
+--- a/src/terrain_3d_region.cpp
++++ b/src/terrain_3d_region.cpp
+@@ -165,7 +165,7 @@ bool Terrain3DRegion::validate_map_size(const Ref<Image> &p_map) const {
+ 		LOG(ERROR, "Image width doesn't match height: ", region_sizev);
+ 		return false;
+ 	}
+-	if (!is_power_of_2(region_sizev.x) || !is_power_of_2(region_sizev.y)) {
++	if (!t3d_is_power_of_2(region_sizev.x) || !t3d_is_power_of_2(region_sizev.y)) {
+ 		LOG(ERROR, "Image dimensions are not a power of 2: ", region_sizev);
+ 		return false;
+ 	}
+diff --git a/src/terrain_3d_texture_asset.cpp b/src/terrain_3d_texture_asset.cpp
+index 180bf1a..738dd6a 100644
+--- a/src/terrain_3d_texture_asset.cpp
++++ b/src/terrain_3d_texture_asset.cpp
+@@ -81,7 +81,7 @@ void Terrain3DTextureAsset::set_albedo_texture(const Ref<Texture2D> &p_texture)
+ 			if (img->get_width() != img->get_height()) {
+ 				LOG(WARN, "Texture '", filename, "' is not square. Mipmaps might have artifacts.");
+ 			}
+-			if (!is_power_of_2(img->get_width()) || !is_power_of_2(img->get_height())) {
++			if (!t3d_is_power_of_2(img->get_width()) || !t3d_is_power_of_2(img->get_height())) {
+ 				LOG(WARN, "Texture '", filename, "' size is not power of 2. This is sub-optimal.");
+ 			}
+ 		}
+@@ -102,7 +102,7 @@ void Terrain3DTextureAsset::set_normal_texture(const Ref<Texture2D> &p_texture)
+ 			if (img->get_width() != img->get_height()) {
+ 				LOG(WARN, "Texture '", filename, "' is not square. Not recommended. Mipmaps might have artifacts.");
+ 			}
+-			if (!is_power_of_2(img->get_width()) || !is_power_of_2(img->get_height())) {
++			if (!t3d_is_power_of_2(img->get_width()) || !t3d_is_power_of_2(img->get_height())) {
+ 				LOG(WARN, "Texture '", filename, "' dimensions are not power of 2. This is sub-optimal.");
+ 			}
+ 		}
+diff --git a/src/terrain_3d_util.h b/src/terrain_3d_util.h
+index 4618ffe..76591d4 100644
+--- a/src/terrain_3d_util.h
++++ b/src/terrain_3d_util.h
+@@ -92,7 +92,7 @@ inline Vector3 v2v3(const Vector2 &p_v2) {
+ ///////////////////////////
+ 
+ template <typename T>
+-inline bool is_power_of_2(const T p_n) {
++inline bool t3d_is_power_of_2(const T p_n) {
+ 	return p_n && !(p_n & (p_n - 1));
+ }
+ 
+@@ -112,7 +112,7 @@ inline T int_ceil_mult(const T numToRound, const T multiple) {
+ template <typename T>
+ inline T int_ceil_pow2(T numToRound, T multiple) {
+ 	static_assert(std::numeric_limits<T>::is_integer, "Only integer types are allowed");
+-	ASSERT(is_power_of_2(multiple), int_ceil_mult(numToRound, multiple));
++	ASSERT(t3d_is_power_of_2(multiple), int_ceil_mult(numToRound, multiple));
+ 	return (numToRound + multiple - 1) & -multiple;
+ }
+ 
