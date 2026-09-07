@@ -92,6 +92,7 @@ private:
         double second = 0.0;
         std::size_t size_value = 0;
         Vec3 vector_value{};
+        Vec3 vector_value2{};
         EntityId id = 0;
         std::shared_ptr<std::promise<EntityId>> spawn_result{};
     };
