@@ -126,7 +126,8 @@ sim_speed_3={
 }
 
 [internationalization]
-locale/translations=PackedStringArray("res://i18n/ui.en.translation", "res://i18n/ui.ru.translation")
+locale/fallback="en"
+locale/translations=PackedStringArray("res://i18n/en.po", "res://i18n/ru.po")
 
 [rendering]
 renderer/rendering_method="forward_plus"
