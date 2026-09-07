@@ -551,7 +551,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         bee_def.metabolism_per_hour = 0.0007;
         bee_def.dehydration_per_hour = 0.0016;
         bee_def.movement_per_hour = 2.2;
-        bee_def.perception_radius = 8.0;
+        bee_def.perception_radius = 12.0;
         bee_def.interaction_radius = 0.35;
         bee_def.bite_biomass_per_hour = 0.002;
         bee_def.maturity_hours = 24.0 * 20.0;
@@ -565,7 +565,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         bee_def.forage_energy_fraction = 0.78;
         bee_def.activity_min_temperature = 7.0;
         bee_def.cruise_height = 1.05;
-        bee_def.home_range_radius = 7.0;
+        bee_def.home_range_radius = 10.0;
         bee_def.decision_interval_hours = 0.8;
         bee_def.rest_duration_hours = 0.45;
         bee_def.social_radius = 5.0;
