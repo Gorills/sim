@@ -982,11 +982,12 @@ void test_simulation_lod_partition_and_phasing() {
     CHECK(grid.region_count() == 16);
 
     const sim::Vec3 observer{300.0, 0.0, 300.0};
-    CHECK(grid.region_at(observer) == sim::RegionCoord{0, 0});
-    CHECK(grid.lod_for({0, 0}, observer) == sim::SimulationLod::individual);
+    const sim::RegionCoord observer_region{0, 0};
+    CHECK(grid.region_at(observer) == observer_region);
+    CHECK(grid.lod_for(observer_region, observer) == sim::SimulationLod::individual);
     CHECK(grid.period_for(sim::SimulationLod::individual) == 1);
-    CHECK(grid.due({0, 0}, sim::SimulationLod::individual, 0));
-    CHECK(grid.due({0, 0}, sim::SimulationLod::individual, 17));
+    CHECK(grid.due(observer_region, sim::SimulationLod::individual, 0));
+    CHECK(grid.due(observer_region, sim::SimulationLod::individual, 17));
 
     const sim::SimulationLodSummary summary = grid.summary(observer, 0);
     CHECK(summary.total_regions == 16);
