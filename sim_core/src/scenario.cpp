@@ -7,6 +7,8 @@
 #include <cmath>
 #include <numbers>
 #include <numeric>
+#include <optional>
+#include <unordered_map>
 
 namespace sim {
 namespace {
@@ -118,6 +120,37 @@ double initial_age(const SpeciesDefinition& definition, ScenarioRandom& random) 
     return minimum + random.unit() * std::max(0.0, maximum - minimum);
 }
 
+using SeededPositions = std::unordered_map<SpeciesId, std::vector<Vec3>>;
+
+std::optional<Vec3> food_linked_anchor(const HabitatGrid& habitat,
+                                       ScenarioRandom& random,
+                                       const SpeciesDefinition& definition,
+                                       const SeededPositions& seeded_positions) {
+    std::vector<Vec3> available;
+    for (const SpeciesId food_id : definition.food_species) {
+        if (const auto it = seeded_positions.find(food_id); it != seeded_positions.end()) {
+            available.insert(available.end(), it->second.begin(), it->second.end());
+        }
+    }
+    if (available.empty()) {
+        return std::nullopt;
+    }
+
+    const std::size_t attempts = std::min<std::size_t>(24, available.size());
+    for (std::size_t attempt = 0; attempt < attempts; ++attempt) {
+        const std::size_t choice = std::min(
+            available.size() - 1,
+            static_cast<std::size_t>(random.unit() * static_cast<double>(available.size())));
+        const Vec3 candidate =
+            grouped_land_position(habitat, random, definition, available[choice]);
+        const HabitatCell* cell = habitat.cell_at(candidate);
+        if (cell != nullptr && habitat_fitness(*cell, definition) >= 0.28) {
+            return candidate;
+        }
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 std::size_t ScenarioSeedResult::total_seeded() const noexcept {
@@ -134,12 +167,17 @@ bool ScenarioSeedResult::complete() const noexcept {
 }
 
 ScenarioSeedResult seed_temperate_island(World& world, const IslandScenarioConfig& config) {
-    const std::array<std::pair<SpeciesId, std::size_t>, 20> requested{{
+    // Seed resources first so consumers can anchor their first groups near already
+    // placed food. This keeps the initial world locally coherent without coupling
+    // the scenario builder to World internals.
+    const std::array<std::pair<SpeciesId, std::size_t>, 29> requested{{
         {species::grass, config.grass},
         {species::clover, config.clover},
+        {species::wildflower, config.wildflower},
         {species::oak, config.oak},
         {species::birch, config.birch},
         {species::pine, config.pine},
+        {species::willow, config.willow},
         {species::berry_bush, config.berry_bush},
         {species::fern, config.fern},
         {species::reeds, config.reeds},
@@ -149,17 +187,25 @@ ScenarioSeedResult seed_temperate_island(World& world, const IslandScenarioConfi
         {species::mouse, config.mouse},
         {species::hare, config.hare},
         {species::boar, config.boar},
-        {species::wolf, config.wolf},
-        {species::fox, config.fox},
+        {species::vole, config.vole},
         {species::bee, config.bee},
         {species::butterfly, config.butterfly},
         {species::beetle, config.beetle},
         {species::ant, config.ant},
+        {species::bumblebee, config.bumblebee},
+        {species::moth, config.moth},
+        {species::robin, config.robin},
+        {species::hedgehog, config.hedgehog},
+        {species::frog, config.frog},
+        {species::wolf, config.wolf},
+        {species::fox, config.fox},
+        {species::owl, config.owl},
     }};
 
     ScenarioRandom random(config.seed);
     ScenarioSeedResult result;
     result.populations.reserve(requested.size());
+    SeededPositions seeded_positions;
 
     for (const auto& [species_id, count] : requested) {
         SeededPopulation population{species_id, count, 0};
@@ -173,7 +219,10 @@ ScenarioSeedResult seed_temperate_island(World& world, const IslandScenarioConfi
         for (std::size_t i = 0; i < count; ++i) {
             const bool starts_group = i % group_size == 0;
             if (starts_group) {
-                group_anchor = random_land_position(world.habitat(), random, *definition);
+                const std::optional<Vec3> linked =
+                    food_linked_anchor(world.habitat(), random, *definition, seeded_positions);
+                group_anchor = linked.value_or(
+                    random_land_position(world.habitat(), random, *definition));
             }
             const Vec3 position =
                 starts_group || group_size == 1
@@ -186,6 +235,7 @@ ScenarioSeedResult seed_temperate_island(World& world, const IslandScenarioConfi
             if (world.enqueue_organism(species_id, position, energy,
                                        initial_age(*definition, random)) != 0) {
                 ++population.seeded;
+                seeded_positions[species_id].push_back(position);
             }
         }
         result.populations.push_back(population);

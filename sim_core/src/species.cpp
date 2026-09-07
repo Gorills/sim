@@ -99,6 +99,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         grass_def.shade_preference = -0.55;
         grass_def.litter_organic_per_hour = 0.00008;
         grass_def.seed_dispersal_radius = 1.2;
+        grass_def.initial_group_size = 18;
         add_scaled_species(catalog, std::move(grass_def));
     }
 
@@ -122,6 +123,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         clover_def.pollination_requirement = 0.18;
         clover_def.litter_organic_per_hour = 0.00005;
         clover_def.seed_dispersal_radius = 1.1;
+        clover_def.initial_group_size = 14;
         add_scaled_species(catalog, std::move(clover_def));
     }
 
@@ -147,6 +149,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         oak_def.pollination_requirement = 0.12;
         oak_def.litter_organic_per_hour = 0.00045;
         oak_def.seed_dispersal_radius = 2.4;
+        oak_def.initial_group_size = 4;
         oak_def.cruise_height = 0.55;
         add_scaled_species(catalog, std::move(oak_def));
     }
@@ -173,6 +176,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         birch_def.pollination_requirement = 0.10;
         birch_def.litter_organic_per_hour = 0.00032;
         birch_def.seed_dispersal_radius = 2.8;
+        birch_def.initial_group_size = 5;
         birch_def.cruise_height = 0.5;
         add_scaled_species(catalog, std::move(birch_def));
     }
@@ -198,6 +202,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         pine_def.shade_preference = 0.15;
         pine_def.litter_organic_per_hour = 0.00038;
         pine_def.seed_dispersal_radius = 3.0;
+        pine_def.initial_group_size = 6;
         pine_def.cruise_height = 0.58;
         add_scaled_species(catalog, std::move(pine_def));
     }
@@ -224,6 +229,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         berry_def.pollination_requirement = 0.22;
         berry_def.litter_organic_per_hour = 0.00012;
         berry_def.seed_dispersal_radius = 1.6;
+        berry_def.initial_group_size = 8;
         berry_def.cruise_height = 0.38;
         add_scaled_species(catalog, std::move(berry_def));
     }
@@ -247,6 +253,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         fern_def.shade_preference = 0.72;
         fern_def.litter_organic_per_hour = 0.00007;
         fern_def.seed_dispersal_radius = 1.0;
+        fern_def.initial_group_size = 12;
         add_scaled_species(catalog, std::move(fern_def));
     }
 
@@ -269,6 +276,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         reeds_def.shade_preference = -0.25;
         reeds_def.litter_organic_per_hour = 0.00016;
         reeds_def.seed_dispersal_radius = 1.8;
+        reeds_def.initial_group_size = 16;
         reeds_def.cruise_height = 0.42;
         add_scaled_species(catalog, std::move(reeds_def));
     }
@@ -293,6 +301,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         mushroom_def.shade_preference = 0.55;
         mushroom_def.organic_growth_factor = 1.0;
         mushroom_def.seed_dispersal_radius = 0.9;
+        mushroom_def.initial_group_size = 10;
         mushroom_def.cruise_height = 0.16;
         add_scaled_species(catalog, std::move(mushroom_def));
     }
@@ -511,7 +520,7 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
     {
         SpeciesDefinition fox_def =
             base_animal(species::fox, "fox", "Fox", EntityKind::carnivore);
-        fox_def.food_species = {species::mouse, species::rabbit, species::hare};
+        fox_def.food_species = {species::mouse, species::vole, species::rabbit, species::hare};
         fox_def.tags = {"animal", "carnivore", "predator"};
         fox_def.initial_biomass = 7.5;
         fox_def.max_biomass = 11.0;
@@ -682,6 +691,304 @@ SpeciesCatalog SpeciesCatalog::temperate_island() {
         ant_def.active_hours_per_day = 15.0;
         ant_def.initial_group_size = 24;
         add_scaled_species(catalog, std::move(ant_def));
+    }
+
+    {
+        SpeciesDefinition wildflower_def =
+            base_plant(species::wildflower, "wildflower", "Wildflower");
+        wildflower_def.tags = {"plant", "ground_cover", "flowering"};
+        wildflower_def.initial_biomass = 1.5;
+        wildflower_def.max_biomass = 8.0;
+        wildflower_def.food_energy_per_biomass = 5.5;
+        wildflower_def.growth_biomass_per_hour = 0.035;
+        wildflower_def.maturity_hours = 24.0 * 10.0;
+        wildflower_def.lifespan_hours = 24.0 * 365.0 * 2.0;
+        wildflower_def.reproduction_interval_hours = 24.0 * 14.0;
+        wildflower_def.reproduction_chance_per_hour = 0.0007;
+        wildflower_def.carrying_density_per_cell = 0.025;
+        wildflower_def.preferred_moisture = 0.58;
+        wildflower_def.moisture_tolerance = 0.38;
+        wildflower_def.preferred_temperature = 17.0;
+        wildflower_def.temperature_tolerance = 16.0;
+        wildflower_def.shade_preference = -0.45;
+        wildflower_def.pollination_requirement = 0.12;
+        wildflower_def.litter_organic_per_hour = 0.00004;
+        wildflower_def.seed_dispersal_radius = 1.4;
+        wildflower_def.initial_group_size = 12;
+        add_scaled_species(catalog, std::move(wildflower_def));
+    }
+
+    {
+        SpeciesDefinition willow_def = base_plant(species::willow, "willow", "Willow");
+        willow_def.tags = {"plant", "tree", "flowering", "canopy"};
+        willow_def.initial_biomass = 8.0;
+        willow_def.max_biomass = 350.0;
+        willow_def.food_energy_per_biomass = 2.5;
+        willow_def.growth_biomass_per_hour = 0.006;
+        willow_def.stress_loss_fraction_per_hour = 0.000008;
+        willow_def.maturity_hours = 24.0 * 365.0 * 5.0;
+        willow_def.lifespan_hours = 24.0 * 365.0 * 120.0;
+        willow_def.reproduction_interval_hours = 24.0 * 365.0;
+        willow_def.reproduction_chance_per_hour = 0.000015;
+        willow_def.carrying_density_per_cell = 0.0025;
+        willow_def.preferred_moisture = 0.78;
+        willow_def.moisture_tolerance = 0.24;
+        willow_def.preferred_temperature = 15.0;
+        willow_def.temperature_tolerance = 16.0;
+        willow_def.canopy_contribution = 0.62;
+        willow_def.shade_preference = 0.1;
+        willow_def.pollination_requirement = 0.08;
+        willow_def.litter_organic_per_hour = 0.00025;
+        willow_def.seed_dispersal_radius = 2.0;
+        willow_def.initial_group_size = 4;
+        add_scaled_species(catalog, std::move(willow_def));
+    }
+
+    {
+        SpeciesDefinition vole_def =
+            base_animal(species::vole, "vole", "Vole", EntityKind::herbivore);
+        vole_def.food_species = {
+            species::grass, species::clover, species::wildflower, species::berry_bush};
+        vole_def.tags = {"animal", "herbivore", "prey"};
+        vole_def.initial_biomass = 0.035;
+        vole_def.max_biomass = 0.06;
+        vole_def.initial_energy = 0.7;
+        vole_def.max_energy = 1.1;
+        vole_def.metabolism_per_hour = 0.0009;
+        vole_def.dehydration_per_hour = 0.0015;
+        vole_def.movement_per_hour = 0.7;
+        vole_def.perception_radius = 3.8;
+        vole_def.interaction_radius = 0.18;
+        vole_def.bite_biomass_per_hour = 0.003;
+        vole_def.maturity_hours = 24.0 * 35.0;
+        vole_def.lifespan_hours = 24.0 * 365.0 * 1.5;
+        vole_def.reproduction_interval_hours = 24.0 * 25.0;
+        vole_def.reproduction_chance_per_hour = 0.0012;
+        vole_def.reproduction_energy_fraction = 0.18;
+        vole_def.carrying_density_per_cell = 0.020;
+        vole_def.cruise_height = 0.12;
+        vole_def.home_range_radius = 3.5;
+        vole_def.decision_interval_hours = 1.2;
+        vole_def.rest_duration_hours = 0.7;
+        vole_def.social_radius = 3.0;
+        vole_def.social_weight = 0.45;
+        vole_def.flee_radius = 5.5;
+        vole_def.flee_speed_multiplier = 1.6;
+        vole_def.activity_peak_hour = 20.0;
+        vole_def.active_hours_per_day = 16.0;
+        vole_def.initial_group_size = 10;
+        add_scaled_species(catalog, std::move(vole_def));
+    }
+
+    {
+        SpeciesDefinition hedgehog_def =
+            base_animal(species::hedgehog, "hedgehog", "Hedgehog", EntityKind::omnivore);
+        hedgehog_def.food_species = {species::beetle, species::ant, species::mushroom};
+        hedgehog_def.tags = {"animal", "omnivore", "insectivore"};
+        hedgehog_def.initial_biomass = 0.8;
+        hedgehog_def.max_biomass = 1.5;
+        hedgehog_def.initial_energy = 3.0;
+        hedgehog_def.max_energy = 5.0;
+        hedgehog_def.metabolism_per_hour = 0.0025;
+        hedgehog_def.dehydration_per_hour = 0.0020;
+        hedgehog_def.movement_per_hour = 0.35;
+        hedgehog_def.perception_radius = 4.0;
+        hedgehog_def.interaction_radius = 0.28;
+        hedgehog_def.bite_biomass_per_hour = 0.01;
+        hedgehog_def.maturity_hours = 24.0 * 365.0;
+        hedgehog_def.lifespan_hours = 24.0 * 365.0 * 6.0;
+        hedgehog_def.reproduction_interval_hours = 24.0 * 300.0;
+        hedgehog_def.reproduction_chance_per_hour = 0.0001;
+        hedgehog_def.reproduction_energy_fraction = 0.24;
+        hedgehog_def.carrying_density_per_cell = 0.0030;
+        hedgehog_def.cruise_height = 0.22;
+        hedgehog_def.home_range_radius = 5.0;
+        hedgehog_def.decision_interval_hours = 2.0;
+        hedgehog_def.rest_duration_hours = 1.4;
+        hedgehog_def.activity_peak_hour = 22.0;
+        hedgehog_def.active_hours_per_day = 12.0;
+        add_scaled_species(catalog, std::move(hedgehog_def));
+    }
+
+    {
+        SpeciesDefinition robin_def =
+            base_animal(species::robin, "robin", "Robin", EntityKind::omnivore);
+        robin_def.food_species = {species::berry_bush, species::beetle, species::ant};
+        robin_def.tags = {"animal", "omnivore", "insectivore", "flying"};
+        robin_def.initial_biomass = 0.07;
+        robin_def.max_biomass = 0.11;
+        robin_def.initial_energy = 1.5;
+        robin_def.max_energy = 2.3;
+        robin_def.metabolism_per_hour = 0.0015;
+        robin_def.dehydration_per_hour = 0.0018;
+        robin_def.movement_per_hour = 2.0;
+        robin_def.perception_radius = 6.0;
+        robin_def.interaction_radius = 0.22;
+        robin_def.bite_biomass_per_hour = 0.004;
+        robin_def.maturity_hours = 24.0 * 300.0;
+        robin_def.lifespan_hours = 24.0 * 365.0 * 5.0;
+        robin_def.reproduction_interval_hours = 24.0 * 180.0;
+        robin_def.reproduction_chance_per_hour = 0.00018;
+        robin_def.reproduction_energy_fraction = 0.22;
+        robin_def.carrying_density_per_cell = 0.0040;
+        robin_def.cruise_height = 2.2;
+        robin_def.home_range_radius = 6.0;
+        robin_def.decision_interval_hours = 1.4;
+        robin_def.rest_duration_hours = 0.8;
+        robin_def.social_radius = 4.0;
+        robin_def.social_weight = 0.32;
+        robin_def.activity_peak_hour = 8.0;
+        robin_def.active_hours_per_day = 13.0;
+        robin_def.initial_group_size = 4;
+        add_scaled_species(catalog, std::move(robin_def));
+    }
+
+    {
+        SpeciesDefinition owl_def =
+            base_animal(species::owl, "owl", "Owl", EntityKind::carnivore);
+        owl_def.food_species = {
+            species::mouse, species::vole, species::hare, species::robin};
+        owl_def.tags = {"animal", "carnivore", "predator", "flying"};
+        owl_def.initial_biomass = 2.5;
+        owl_def.max_biomass = 4.0;
+        owl_def.initial_energy = 10.0;
+        owl_def.max_energy = 16.0;
+        owl_def.metabolism_per_hour = 0.006;
+        owl_def.dehydration_per_hour = 0.0015;
+        owl_def.movement_per_hour = 2.4;
+        owl_def.perception_radius = 10.0;
+        owl_def.interaction_radius = 0.42;
+        owl_def.bite_biomass_per_hour = 0.025;
+        owl_def.maturity_hours = 24.0 * 365.0;
+        owl_def.lifespan_hours = 24.0 * 365.0 * 15.0;
+        owl_def.reproduction_interval_hours = 24.0 * 365.0;
+        owl_def.reproduction_chance_per_hour = 0.000055;
+        owl_def.reproduction_energy_fraction = 0.27;
+        owl_def.carrying_density_per_cell = 0.0008;
+        owl_def.cruise_height = 3.2;
+        owl_def.forage_energy_fraction = 0.68;
+        owl_def.home_range_radius = 10.0;
+        owl_def.decision_interval_hours = 3.0;
+        owl_def.rest_duration_hours = 1.5;
+        owl_def.social_radius = 2.0;
+        owl_def.social_weight = 0.18;
+        owl_def.hunt_speed_multiplier = 1.65;
+        owl_def.activity_peak_hour = 0.0;
+        owl_def.active_hours_per_day = 12.0;
+        owl_def.initial_group_size = 2;
+        add_scaled_species(catalog, std::move(owl_def));
+    }
+
+    {
+        SpeciesDefinition frog_def =
+            base_animal(species::frog, "frog", "Frog", EntityKind::carnivore);
+        frog_def.food_species = {
+            species::beetle, species::butterfly, species::bumblebee, species::moth};
+        frog_def.tags = {"animal", "carnivore", "insectivore", "prey"};
+        frog_def.initial_biomass = 0.05;
+        frog_def.max_biomass = 0.09;
+        frog_def.initial_energy = 0.8;
+        frog_def.max_energy = 1.3;
+        frog_def.metabolism_per_hour = 0.0007;
+        frog_def.dehydration_per_hour = 0.0025;
+        frog_def.movement_per_hour = 0.25;
+        frog_def.perception_radius = 2.5;
+        frog_def.interaction_radius = 0.16;
+        frog_def.bite_biomass_per_hour = 0.0025;
+        frog_def.maturity_hours = 24.0 * 120.0;
+        frog_def.lifespan_hours = 24.0 * 365.0 * 6.0;
+        frog_def.reproduction_interval_hours = 24.0 * 120.0;
+        frog_def.reproduction_chance_per_hour = 0.00022;
+        frog_def.reproduction_energy_fraction = 0.18;
+        frog_def.carrying_density_per_cell = 0.0060;
+        frog_def.preferred_moisture = 0.88;
+        frog_def.moisture_tolerance = 0.20;
+        frog_def.activity_min_temperature = 8.0;
+        frog_def.cruise_height = 0.12;
+        frog_def.home_range_radius = 3.0;
+        frog_def.decision_interval_hours = 1.1;
+        frog_def.rest_duration_hours = 0.7;
+        frog_def.social_radius = 2.2;
+        frog_def.social_weight = 0.25;
+        frog_def.activity_peak_hour = 21.0;
+        frog_def.active_hours_per_day = 12.0;
+        frog_def.initial_group_size = 5;
+        add_scaled_species(catalog, std::move(frog_def));
+    }
+
+    {
+        SpeciesDefinition bumblebee_def =
+            base_animal(species::bumblebee, "bumblebee", "Bumblebee", EntityKind::insect);
+        bumblebee_def.food_species = {
+            species::clover, species::wildflower, species::berry_bush};
+        bumblebee_def.tags = {"animal", "insect", "pollinator", "flying"};
+        bumblebee_def.initial_biomass = 0.02;
+        bumblebee_def.max_biomass = 0.03;
+        bumblebee_def.initial_energy = 0.9;
+        bumblebee_def.max_energy = 1.4;
+        bumblebee_def.metabolism_per_hour = 0.0008;
+        bumblebee_def.dehydration_per_hour = 0.0016;
+        bumblebee_def.movement_per_hour = 2.0;
+        bumblebee_def.perception_radius = 10.0;
+        bumblebee_def.interaction_radius = 0.32;
+        bumblebee_def.bite_biomass_per_hour = 0.002;
+        bumblebee_def.maturity_hours = 24.0 * 24.0;
+        bumblebee_def.lifespan_hours = 24.0 * 365.0 * 1.5;
+        bumblebee_def.reproduction_interval_hours = 24.0 * 30.0;
+        bumblebee_def.reproduction_chance_per_hour = 0.0008;
+        bumblebee_def.reproduction_energy_fraction = 0.18;
+        bumblebee_def.carrying_density_per_cell = 0.0080;
+        bumblebee_def.pollination_deposit_per_hour = 0.26;
+        bumblebee_def.nectar_energy_per_hour = 0.014;
+        bumblebee_def.forage_energy_fraction = 0.78;
+        bumblebee_def.activity_min_temperature = 5.0;
+        bumblebee_def.cruise_height = 1.0;
+        bumblebee_def.home_range_radius = 7.0;
+        bumblebee_def.decision_interval_hours = 0.8;
+        bumblebee_def.rest_duration_hours = 0.5;
+        bumblebee_def.social_radius = 4.5;
+        bumblebee_def.social_weight = 0.52;
+        bumblebee_def.activity_peak_hour = 12.0;
+        bumblebee_def.active_hours_per_day = 12.0;
+        bumblebee_def.initial_group_size = 10;
+        add_scaled_species(catalog, std::move(bumblebee_def));
+    }
+
+    {
+        SpeciesDefinition moth_def =
+            base_animal(species::moth, "moth", "Moth", EntityKind::insect);
+        moth_def.food_species = {species::wildflower, species::berry_bush};
+        moth_def.tags = {"animal", "insect", "pollinator", "flying"};
+        moth_def.initial_biomass = 0.009;
+        moth_def.max_biomass = 0.015;
+        moth_def.initial_energy = 0.6;
+        moth_def.max_energy = 1.0;
+        moth_def.metabolism_per_hour = 0.0006;
+        moth_def.dehydration_per_hour = 0.0015;
+        moth_def.movement_per_hour = 1.7;
+        moth_def.perception_radius = 7.0;
+        moth_def.interaction_radius = 0.28;
+        moth_def.bite_biomass_per_hour = 0.0012;
+        moth_def.maturity_hours = 24.0 * 18.0;
+        moth_def.lifespan_hours = 24.0 * 365.0;
+        moth_def.reproduction_interval_hours = 24.0 * 20.0;
+        moth_def.reproduction_chance_per_hour = 0.0010;
+        moth_def.reproduction_energy_fraction = 0.16;
+        moth_def.carrying_density_per_cell = 0.0090;
+        moth_def.pollination_deposit_per_hour = 0.12;
+        moth_def.nectar_energy_per_hour = 0.007;
+        moth_def.forage_energy_fraction = 0.76;
+        moth_def.activity_min_temperature = 6.0;
+        moth_def.cruise_height = 1.1;
+        moth_def.home_range_radius = 5.5;
+        moth_def.decision_interval_hours = 0.8;
+        moth_def.rest_duration_hours = 0.55;
+        moth_def.social_radius = 3.0;
+        moth_def.social_weight = 0.22;
+        moth_def.activity_peak_hour = 23.0;
+        moth_def.active_hours_per_day = 10.0;
+        moth_def.initial_group_size = 6;
+        add_scaled_species(catalog, std::move(moth_def));
     }
 
     return catalog;

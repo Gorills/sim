@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <utility>
 
 namespace {
 
@@ -219,6 +220,16 @@ void test_species_catalog_data_driven_web() {
     CHECK(catalog.find("beetle") != nullptr);
     CHECK(catalog.find("ant") != nullptr);
     CHECK(catalog.find("wolf") != nullptr);
+    CHECK(catalog.find("wildflower") != nullptr);
+    CHECK(catalog.find("willow") != nullptr);
+    CHECK(catalog.find("vole") != nullptr);
+    CHECK(catalog.find("hedgehog") != nullptr);
+    CHECK(catalog.find("robin") != nullptr);
+    CHECK(catalog.find("owl") != nullptr);
+    CHECK(catalog.find("frog") != nullptr);
+    CHECK(catalog.find("bumblebee") != nullptr);
+    CHECK(catalog.find("moth") != nullptr);
+    CHECK(catalog.all().size() >= 29);
 
     CHECK(catalog.find("clover")->kind == sim::EntityKind::plant);
     CHECK(sim::has_tag(*catalog.find("clover"), "nitrogen_fixer"));
@@ -238,6 +249,17 @@ void test_species_catalog_data_driven_web() {
     CHECK(catalog.find("bee")->home_range_radius >= 1'500.0);
     CHECK(catalog.find("butterfly")->nectar_energy_per_hour > 0.0);
     CHECK(catalog.find("butterfly")->lifespan_hours >= 24.0 * 300.0);
+    CHECK(sim::has_tag(*catalog.find("wildflower"), "flowering"));
+    CHECK(sim::has_tag(*catalog.find("willow"), "tree"));
+    CHECK(catalog.find("vole")->kind == sim::EntityKind::herbivore);
+    CHECK(catalog.find("hedgehog")->kind == sim::EntityKind::omnivore);
+    CHECK(sim::has_tag(*catalog.find("robin"), "flying"));
+    CHECK(sim::has_tag(*catalog.find("owl"), "flying"));
+    CHECK(sim::has_tag(*catalog.find("bumblebee"), "pollinator"));
+    CHECK(sim::has_tag(*catalog.find("moth"), "pollinator"));
+    CHECK(catalog.find("frog")->preferred_moisture > 0.8);
+    CHECK(catalog.find("wildflower")->initial_group_size > 1);
+    CHECK(catalog.find("grass")->initial_group_size > 1);
 
     const sim::SpeciesDefinition* rabbit = catalog.find("rabbit");
     const sim::SpeciesDefinition* deer = catalog.find("deer");
@@ -268,8 +290,42 @@ void configure_compact_island(sim::WorldConfig& config) {
     config.bounds_max = {3'600.0, 500.0, 3'600.0};
 }
 
-sim::IslandScenarioConfig compact_island_populations() {
+sim::IslandScenarioConfig empty_island_populations() {
     sim::IslandScenarioConfig island;
+    island.grass = 0;
+    island.clover = 0;
+    island.oak = 0;
+    island.birch = 0;
+    island.pine = 0;
+    island.berry_bush = 0;
+    island.fern = 0;
+    island.reeds = 0;
+    island.mushroom = 0;
+    island.wildflower = 0;
+    island.willow = 0;
+    island.rabbit = 0;
+    island.deer = 0;
+    island.mouse = 0;
+    island.hare = 0;
+    island.boar = 0;
+    island.vole = 0;
+    island.bee = 0;
+    island.butterfly = 0;
+    island.beetle = 0;
+    island.ant = 0;
+    island.bumblebee = 0;
+    island.moth = 0;
+    island.robin = 0;
+    island.hedgehog = 0;
+    island.frog = 0;
+    island.wolf = 0;
+    island.fox = 0;
+    island.owl = 0;
+    return island;
+}
+
+sim::IslandScenarioConfig compact_island_populations() {
+    sim::IslandScenarioConfig island = empty_island_populations();
     island.grass = 48;
     island.clover = 22;
     island.oak = 4;
@@ -339,10 +395,122 @@ void test_default_island_scale_and_habitat_snapshot() {
     CHECK(world.snapshot().mean_organic > 0.0);
 
     sim::IslandScenarioConfig island;
-    CHECK(island.wolf == 4);
+    CHECK(island.wolf == 6);
     CHECK(island.fox >= island.wolf * 2);
     CHECK(island.rabbit >= island.wolf * 50);
     CHECK(island.deer >= island.wolf * 10);
+    CHECK(island.wildflower >= island.clover);
+    CHECK(island.vole >= island.rabbit);
+    CHECK(island.bumblebee + island.moth + island.bee + island.butterfly >= 700);
+
+    const std::size_t total =
+        island.grass + island.clover + island.oak + island.birch + island.pine +
+        island.berry_bush + island.fern + island.reeds + island.mushroom +
+        island.wildflower + island.willow + island.rabbit + island.deer +
+        island.mouse + island.hare + island.boar + island.vole + island.bee +
+        island.butterfly + island.beetle + island.ant + island.bumblebee +
+        island.moth + island.robin + island.hedgehog + island.frog + island.wolf +
+        island.fox + island.owl;
+    CHECK(total == 9'017);
+}
+
+void test_food_linked_seeding_preserves_consumer_habitat() {
+    sim::WorldConfig config;
+    config.habitat.width = 16;
+    config.habitat.height = 16;
+    config.habitat.cell_size = 1.0;
+    config.habitat.origin = {-8.0, 0.0, -8.0};
+    config.bounds_min = {-8.0, 0.0, -8.0};
+    config.bounds_max = {8.0, 8.0, 8.0};
+
+    sim::SpeciesCatalog catalog;
+    sim::SpeciesDefinition food;
+    food.id = sim::species::grass;
+    food.key = "dry_food";
+    food.display_name = "Dry food";
+    food.kind = sim::EntityKind::plant;
+    food.initial_biomass = 1.0;
+    food.max_biomass = 2.0;
+    food.preferred_moisture = 0.2;
+    food.moisture_tolerance = 0.02;
+    food.preferred_temperature = 18.0;
+    food.temperature_tolerance = 100.0;
+    CHECK(catalog.add(food));
+
+    sim::SpeciesDefinition consumer;
+    consumer.id = sim::species::rabbit;
+    consumer.key = "wet_consumer";
+    consumer.display_name = "Wet consumer";
+    consumer.kind = sim::EntityKind::herbivore;
+    consumer.food_species = {sim::species::grass};
+    consumer.initial_biomass = 1.0;
+    consumer.max_biomass = 2.0;
+    consumer.initial_energy = 1.0;
+    consumer.max_energy = 2.0;
+    consumer.preferred_moisture = 0.9;
+    consumer.moisture_tolerance = 0.02;
+    consumer.preferred_temperature = 18.0;
+    consumer.temperature_tolerance = 100.0;
+    consumer.home_range_radius = 1.0;
+    CHECK(catalog.add(consumer));
+
+    sim::World world(config, std::move(catalog));
+    for (std::size_t z = 0; z < config.habitat.height; ++z) {
+        for (std::size_t x = 0; x < config.habitat.width; ++x) {
+            sim::HabitatCell& cell = world.habitat().cell(x, z);
+            cell.water = false;
+            cell.fresh_water = false;
+            cell.temperature = 18.0;
+            cell.moisture = x <= 6 ? 0.2 : (x >= 10 ? 0.9 : 0.5);
+        }
+    }
+
+    sim::IslandScenarioConfig island = empty_island_populations();
+    island.seed = 91;
+    island.grass = 1;
+    island.rabbit = 1;
+    const sim::ScenarioSeedResult seeded = sim::seed_temperate_island(world, island);
+    CHECK(seeded.complete());
+
+    std::optional<sim::Vec3> consumer_position;
+    for (const sim::EntityState& entity : world.snapshot().entities) {
+        if (entity.species_id == sim::species::rabbit) {
+            consumer_position = entity.position;
+            break;
+        }
+    }
+    CHECK(consumer_position.has_value());
+    if (consumer_position.has_value()) {
+        const sim::HabitatCell* cell = world.habitat().cell_at(*consumer_position);
+        CHECK(cell != nullptr);
+        CHECK(cell == nullptr || cell->moisture == 0.9);
+    }
+}
+
+void test_consumers_seed_near_existing_food() {
+    sim::World world;
+    sim::IslandScenarioConfig island = empty_island_populations();
+    island.seed = 77;
+    island.grass = 1;
+    island.rabbit = 1;
+    const sim::ScenarioSeedResult seeded = sim::seed_temperate_island(world, island);
+    CHECK(seeded.complete());
+    CHECK(seeded.total_seeded() == 2);
+
+    std::optional<sim::Vec3> grass_position;
+    std::optional<sim::Vec3> rabbit_position;
+    for (const sim::EntityState& entity : world.snapshot().entities) {
+        if (entity.species_id == sim::species::grass) {
+            grass_position = entity.position;
+        } else if (entity.species_id == sim::species::rabbit) {
+            rabbit_position = entity.position;
+        }
+    }
+    CHECK(grass_position.has_value());
+    CHECK(rabbit_position.has_value());
+    if (grass_position.has_value() && rabbit_position.has_value()) {
+        CHECK(sim::length(*rabbit_position - *grass_position) <= 150.0);
+    }
 }
 
 void test_interest_snapshots_and_overview() {
@@ -795,6 +963,8 @@ int main() {
     test_habitat_large_steps_cover_full_interval();
     test_species_catalog_data_driven_web();
     test_default_island_scale_and_habitat_snapshot();
+    test_food_linked_seeding_preserves_consumer_habitat();
+    test_consumers_seed_near_existing_food();
     test_interest_snapshots_and_overview();
     test_biome_layers_affect_dynamics();
     test_animals_do_not_overshoot_food_on_long_ticks();
