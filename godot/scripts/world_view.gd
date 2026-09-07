@@ -63,6 +63,7 @@ var _habitat: Object
 var _organism_targets: Dictionary = {}
 var _organism_groups: Dictionary = {}
 var _last_interest_center := Vector3.INF
+var _last_render_generation: int = -1
 var _terrain_vertex_count := 0
 var _terrain_heights := PackedFloat32Array()
 var _terrain_colors := PackedColorArray()
@@ -77,6 +78,11 @@ func bind_sim(sim: Node) -> void:
 	_organism_targets.clear()
 	_organism_groups.clear()
 	_last_interest_center = _sim.get("render_center") as Vector3
+	_last_render_generation = (
+		int(_sim.call("get_render_generation"))
+		if _sim.has_method("get_render_generation")
+		else -1
+	)
 	_refresh_terrain(true)
 	_refresh_organisms(true)
 	_present_organisms()
@@ -111,6 +117,10 @@ func refresh_interest_now() -> void:
 	if _sim == null:
 		return
 	_last_interest_center = _sim.get("render_center") as Vector3
+	# Async runtimes publish a generation only after the worker has prepared the
+	# requested interest. Keep presenting the previous ready region until then.
+	if _sim.has_method("get_render_generation"):
+		return
 	_refresh_terrain(true)
 	_refresh_organisms(true)
 	_present_organisms()
@@ -168,11 +178,28 @@ func _process(_delta: float) -> void:
 		_last_interest_center == Vector3.INF
 		or interest_center.distance_squared_to(_last_interest_center) > 1.0
 	)
-	if interest_changed or _habitat == null or not _has_terrain_visual():
+	var has_async_interest := _sim.has_method("get_render_generation")
+	var render_generation := (
+		int(_sim.call("get_render_generation"))
+		if has_async_interest
+		else -1
+	)
+	var generation_changed := (
+		has_async_interest
+		and render_generation != _last_render_generation
+	)
+	var ready_interest_changed := (
+		generation_changed
+		or (not has_async_interest and interest_changed)
+	)
+
+	if ready_interest_changed or _habitat == null or not _has_terrain_visual():
 		_last_interest_center = interest_center
+		if has_async_interest:
+			_last_render_generation = render_generation
 		_refresh_terrain(true)
 
-	_refresh_organisms(false)
+	_refresh_organisms(generation_changed)
 	_present_organisms()
 
 

@@ -3,6 +3,8 @@
 #include "sim/command.hpp"
 #include "sim/habitat.hpp"
 #include "sim/scenario.hpp"
+#include "sim/runtime.hpp"
+#include "sim/simulation_lod.hpp"
 #include "sim/snapshot.hpp"
 #include "sim/species.hpp"
 #include "sim/stepper.hpp"

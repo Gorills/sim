@@ -1,6 +1,9 @@
 #include "sim/sim.hpp"
 
+#include <chrono>
 #include <iostream>
+#include <memory>
+#include <thread>
 #include <limits>
 #include <optional>
 #include <utility>
@@ -963,6 +966,106 @@ void test_generic_agent_mode_still_independent() {
     CHECK(entity->position.x == 0.5);
 }
 
+
+void test_simulation_lod_partition_and_phasing() {
+    sim::SimulationLodConfig lod;
+    lod.region_size = 600.0;
+    lod.individual_radius = 0.0;
+    lod.cohort_radius = 600.0;
+    lod.individual_period_ticks = 1;
+    lod.cohort_period_ticks = 4;
+    lod.aggregate_period_ticks = 20;
+
+    const sim::SimulationLodGrid grid({0.0, 0.0, 0.0}, {2'400.0, 100.0, 2'400.0}, lod);
+    CHECK(grid.columns() == 4);
+    CHECK(grid.rows() == 4);
+    CHECK(grid.region_count() == 16);
+
+    const sim::Vec3 observer{300.0, 0.0, 300.0};
+    const sim::RegionCoord observer_region{0, 0};
+    CHECK(grid.region_at(observer) == observer_region);
+    CHECK(grid.lod_for(observer_region, observer) == sim::SimulationLod::individual);
+    CHECK(grid.period_for(sim::SimulationLod::individual) == 1);
+    CHECK(grid.due(observer_region, sim::SimulationLod::individual, 0));
+    CHECK(grid.due(observer_region, sim::SimulationLod::individual, 17));
+
+    const sim::SimulationLodSummary summary = grid.summary(observer, 0);
+    CHECK(summary.total_regions == 16);
+    CHECK(summary.individual_regions + summary.cohort_regions + summary.aggregate_regions == 16);
+    CHECK(summary.individual_regions >= 1);
+    CHECK(summary.aggregate_regions >= 1);
+
+    const sim::RegionCoord far_region{3, 3};
+    CHECK(grid.lod_for(far_region, observer) == sim::SimulationLod::aggregate);
+    int due_count = 0;
+    for (std::uint64_t tick = 0; tick < 20; ++tick) {
+        due_count += grid.due(far_region, sim::SimulationLod::aggregate, tick) ? 1 : 0;
+    }
+    CHECK(due_count == 1);
+}
+
+void test_async_runtime_owns_world_and_publishes_frames() {
+    sim::WorldConfig config;
+    config.tick_dt = 0.01;
+    config.ecology_hours_per_tick = 0.01;
+    config.habitat.width = 8;
+    config.habitat.height = 8;
+    config.habitat.cell_size = 10.0;
+    config.habitat.origin = {-40.0, 0.0, -40.0};
+    config.bounds_min = {-40.0, 0.0, -40.0};
+    config.bounds_max = {40.0, 20.0, 40.0};
+
+    auto world = std::make_unique<sim::World>(config);
+    const sim::EntityId id = world->enqueue_spawn({0.0, 1.0, 0.0}, {2.0, 0.0, 0.0});
+    CHECK(id != 0);
+    world->flush_commands();
+
+    sim::RuntimeOptions options;
+    options.render_radius = 100.0;
+    options.render_center = {};
+    options.speed_scale = 1.0;
+    sim::SimulationRuntime runtime(std::move(world), options);
+
+    const auto initial = runtime.frame();
+    CHECK(initial != nullptr);
+    CHECK(initial != nullptr && initial->tick == 0);
+    CHECK(initial != nullptr && initial->current_render != nullptr);
+    CHECK(initial != nullptr && initial->lod_summary.total_regions > 0);
+
+    runtime.start();
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        const auto frame = runtime.frame();
+        if (frame != nullptr && frame->tick >= 2) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    const auto advanced = runtime.frame();
+    CHECK(advanced != nullptr);
+    CHECK(advanced != nullptr && advanced->tick >= 2);
+    CHECK(advanced != nullptr && advanced->current_render != nullptr);
+    if (advanced != nullptr && advanced->current_render != nullptr) {
+        const auto entity = sim::find_entity(*advanced->current_render, id);
+        CHECK(entity.has_value());
+        CHECK(!entity.has_value() || entity->position.x > 0.0);
+    }
+    CHECK(runtime.render_alpha() >= 0.0);
+    CHECK(runtime.render_alpha() <= 1.0);
+
+    runtime.request_paused(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    const auto paused_a = runtime.frame();
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    const auto paused_b = runtime.frame();
+    CHECK(runtime.requested_paused());
+    CHECK(paused_a != nullptr && paused_b != nullptr);
+    CHECK(paused_a == nullptr || paused_b == nullptr || paused_a->tick == paused_b->tick);
+
+    runtime.stop();
+    CHECK(!runtime.running());
+}
+
 } // namespace
 
 int main() {
@@ -996,6 +1099,8 @@ int main() {
     test_species_catalog_and_island_food_chain();
     test_island_determinism();
     test_generic_agent_mode_still_independent();
+    test_simulation_lod_partition_and_phasing();
+    test_async_runtime_owns_world_and_publishes_frames();
 
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
