@@ -1,6 +1,10 @@
+find_package(Threads REQUIRED)
+
 add_library(sim_core STATIC
     src/habitat.cpp
     src/scenario.cpp
+    src/runtime.cpp
+    src/simulation_lod.cpp
     src/snapshot.cpp
     src/species.cpp
     src/world.cpp
@@ -13,6 +17,7 @@ target_include_directories(sim_core
 )
 
 target_compile_features(sim_core PUBLIC cxx_std_20)
+target_link_libraries(sim_core PUBLIC Threads::Threads)
 set_target_properties(sim_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 sim_set_warnings(sim_core)
