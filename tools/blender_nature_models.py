@@ -2,6 +2,9 @@
 
 Organisms are modeled Z-up, animals/insects face +X, origin at ground
 (except flying insects, whose origin is the thorax).
+
+Catalog-backed GLBs from tools/blender_catalog_organisms.py are kept unless
+SIM_PROCEDURAL_ORGANISMS=1.
 """
 
 from __future__ import annotations
@@ -1077,12 +1080,30 @@ def main() -> dict:
 
     os.makedirs(EXPORT_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(BLEND_PATH), exist_ok=True)
+    catalog_backed = {
+        "oak",
+        "birch",
+        "pine",
+        "grass",
+        "reeds",
+        "deer",
+        "boar",
+        "wolf",
+        "fox",
+        "mouse",
+        "butterfly",
+        "ant",
+    }
+    keep_catalog = os.environ.get("SIM_PROCEDURAL_ORGANISMS") != "1"
     exported = []
     for key in SPECIES:
         obj = bpy.data.objects.get(f"org_{key}")
         if obj is None:
             continue
-        exported.append(export_organism(obj, os.path.join(EXPORT_DIR, f"{key}.glb")))
+        glb_path = os.path.join(EXPORT_DIR, f"{key}.glb")
+        if keep_catalog and key in catalog_backed and os.path.isfile(glb_path):
+            continue
+        exported.append(export_organism(obj, glb_path))
 
     bpy.ops.wm.save_as_mainfile(filepath=BLEND_PATH)
     set_viewport_shading()
