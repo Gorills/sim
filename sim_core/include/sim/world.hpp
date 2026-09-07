@@ -95,7 +95,10 @@ public:
     void set_tick_dt(double tick_dt);
 
     [[nodiscard]] Snapshot snapshot() const;
+    [[nodiscard]] Snapshot snapshot(Vec3 center, double radius) const;
     [[nodiscard]] HabitatSnapshot habitat_snapshot() const;
+    [[nodiscard]] HabitatSnapshot habitat_snapshot(Vec3 center, double radius) const;
+    [[nodiscard]] OverviewSnapshot overview_snapshot(std::size_t resolution = 96) const;
     [[nodiscard]] std::uint64_t tick_index() const noexcept { return tick_index_; }
     [[nodiscard]] double tick_dt() const noexcept { return config_.tick_dt; }
     [[nodiscard]] bool paused() const noexcept { return paused_; }
