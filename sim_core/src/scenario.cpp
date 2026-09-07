@@ -126,28 +126,27 @@ std::optional<Vec3> food_linked_anchor(const HabitatGrid& habitat,
                                        ScenarioRandom& random,
                                        const SpeciesDefinition& definition,
                                        const SeededPositions& seeded_positions) {
-    std::size_t available = 0;
+    std::vector<Vec3> available;
     for (const SpeciesId food_id : definition.food_species) {
         if (const auto it = seeded_positions.find(food_id); it != seeded_positions.end()) {
-            available += it->second.size();
+            available.insert(available.end(), it->second.begin(), it->second.end());
         }
     }
-    if (available == 0) {
+    if (available.empty()) {
         return std::nullopt;
     }
 
-    std::size_t choice = std::min(
-        available - 1,
-        static_cast<std::size_t>(random.unit() * static_cast<double>(available)));
-    for (const SpeciesId food_id : definition.food_species) {
-        const auto it = seeded_positions.find(food_id);
-        if (it == seeded_positions.end()) {
-            continue;
+    const std::size_t attempts = std::min<std::size_t>(24, available.size());
+    for (std::size_t attempt = 0; attempt < attempts; ++attempt) {
+        const std::size_t choice = std::min(
+            available.size() - 1,
+            static_cast<std::size_t>(random.unit() * static_cast<double>(available.size())));
+        const Vec3 candidate =
+            grouped_land_position(habitat, random, definition, available[choice]);
+        const HabitatCell* cell = habitat.cell_at(candidate);
+        if (cell != nullptr && habitat_fitness(*cell, definition) >= 0.28) {
+            return candidate;
         }
-        if (choice < it->second.size()) {
-            return grouped_land_position(habitat, random, definition, it->second[choice]);
-        }
-        choice -= it->second.size();
     }
     return std::nullopt;
 }
