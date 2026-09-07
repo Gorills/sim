@@ -394,7 +394,7 @@ void test_default_island_scale_and_habitat_snapshot() {
     CHECK(world.snapshot().mean_organic > 0.0);
 
     sim::IslandScenarioConfig island;
-    CHECK(island.wolf == 4);
+    CHECK(island.wolf == 6);
     CHECK(island.fox >= island.wolf * 2);
     CHECK(island.rabbit >= island.wolf * 50);
     CHECK(island.deer >= island.wolf * 10);
