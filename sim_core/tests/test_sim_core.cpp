@@ -1004,6 +1004,116 @@ void test_simulation_lod_partition_and_phasing() {
     CHECK(due_count == 1);
 }
 
+
+sim::WorldConfig temporal_lod_test_config() {
+    sim::WorldConfig config;
+    config.tick_dt = 0.05;
+    config.ecology_hours_per_tick = 0.5;
+    config.habitat.width = 24;
+    config.habitat.height = 24;
+    config.habitat.cell_size = 100.0;
+    config.habitat.origin = {0.0, 0.0, 0.0};
+    config.bounds_min = {0.0, 0.0, 0.0};
+    config.bounds_max = {2'400.0, 100.0, 2'400.0};
+    config.simulation_lod_enabled = true;
+    config.simulation_lod.region_size = 600.0;
+    config.simulation_lod.individual_radius = 100.0;
+    config.simulation_lod.cohort_radius = 600.0;
+    config.simulation_lod.individual_period_ticks = 1;
+    config.simulation_lod.cohort_period_ticks = 2;
+    config.simulation_lod.aggregate_period_ticks = 4;
+    return config;
+}
+
+void force_land(sim::World& world, std::size_t x, std::size_t z) {
+    sim::HabitatCell& cell = world.habitat().cell(x, z);
+    cell.water = false;
+    cell.fresh_water = false;
+    cell.moisture = 0.6;
+    cell.nutrients = 0.8;
+    cell.temperature = 18.0;
+}
+
+void test_temporal_lod_defers_far_work_and_catches_up_on_due_tick() {
+    sim::WorldConfig config = temporal_lod_test_config();
+    sim::World world(config);
+    force_land(world, 1, 1);
+    force_land(world, 22, 22);
+
+    const sim::Vec3 far_position = world.habitat().cell_center(1, 1);
+    const sim::Vec3 near_position = world.habitat().cell_center(22, 22);
+    world.set_simulation_observer(near_position);
+
+    const sim::EntityId far_id = world.enqueue_organism(sim::species::grass, far_position);
+    const sim::EntityId near_id = world.enqueue_organism(sim::species::grass, near_position);
+    CHECK(far_id != 0);
+    CHECK(near_id != 0);
+    world.flush_commands();
+
+    world.tick();
+    const sim::SimulationWorkStats first_work = world.simulation_work_stats();
+    CHECK(first_work.organism_entities == 2);
+    CHECK(first_work.individual_entities == 1);
+    CHECK(first_work.aggregate_entities == 1);
+    CHECK(first_work.updated_entities == 1);
+    CHECK(first_work.deferred_entities == 1);
+
+    const auto far_after_one = sim::find_entity(world.snapshot(), far_id);
+    const auto near_after_one = sim::find_entity(world.snapshot(), near_id);
+    CHECK(far_after_one.has_value());
+    CHECK(near_after_one.has_value());
+    CHECK(!far_after_one.has_value() || far_after_one->age_hours == 0.0);
+    CHECK(!near_after_one.has_value() || near_after_one->age_hours == 0.5);
+
+    world.tick();
+    world.tick();
+    world.tick();
+
+    const auto far_after_four = sim::find_entity(world.snapshot(), far_id);
+    const auto near_after_four = sim::find_entity(world.snapshot(), near_id);
+    CHECK(far_after_four.has_value());
+    CHECK(near_after_four.has_value());
+    CHECK(!far_after_four.has_value() || far_after_four->age_hours == 2.0);
+    CHECK(!near_after_four.has_value() || near_after_four->age_hours == 2.0);
+
+    const sim::SimulationWorkStats fourth_work = world.simulation_work_stats();
+    CHECK(fourth_work.updated_entities == 2);
+    CHECK(fourth_work.deferred_entities == 0);
+    CHECK(fourth_work.max_catchup_hours == 2.0);
+}
+
+void test_temporal_lod_promotion_preserves_elapsed_simulated_time() {
+    sim::WorldConfig config = temporal_lod_test_config();
+    sim::World world(config);
+    force_land(world, 1, 1);
+    force_land(world, 22, 22);
+
+    const sim::Vec3 far_position = world.habitat().cell_center(1, 1);
+    const sim::Vec3 initial_observer = world.habitat().cell_center(22, 22);
+    world.set_simulation_observer(initial_observer);
+
+    const sim::EntityId id = world.enqueue_organism(sim::species::grass, far_position);
+    CHECK(id != 0);
+    world.flush_commands();
+
+    world.tick();
+    const auto deferred = sim::find_entity(world.snapshot(), id);
+    CHECK(deferred.has_value());
+    CHECK(!deferred.has_value() || deferred->age_hours == 0.0);
+
+    world.set_simulation_observer(far_position);
+    world.tick();
+
+    const auto promoted = sim::find_entity(world.snapshot(), id);
+    CHECK(promoted.has_value());
+    CHECK(!promoted.has_value() || promoted->age_hours == 1.0);
+    const sim::SimulationWorkStats work = world.simulation_work_stats();
+    CHECK(work.individual_entities == 1);
+    CHECK(work.updated_entities == 1);
+    CHECK(work.deferred_entities == 0);
+    CHECK(work.max_catchup_hours == 1.0);
+}
+
 void test_async_runtime_owns_world_and_publishes_frames() {
     sim::WorldConfig config;
     config.tick_dt = 0.01;
@@ -1100,6 +1210,8 @@ int main() {
     test_island_determinism();
     test_generic_agent_mode_still_independent();
     test_simulation_lod_partition_and_phasing();
+    test_temporal_lod_defers_far_work_and_catches_up_on_due_tick();
+    test_temporal_lod_promotion_preserves_elapsed_simulated_time();
     test_async_runtime_owns_world_and_publishes_frames();
 
     if (g_failures != 0) {
