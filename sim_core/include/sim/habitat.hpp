@@ -52,10 +52,10 @@ struct ClimateConfig {
 };
 
 struct HabitatConfig {
-    std::size_t width = 96;
-    std::size_t height = 96;
-    double cell_size = 0.5;
-    Vec3 origin{-24.0, 0.0, -24.0};
+    std::size_t width = 256;
+    std::size_t height = 256;
+    double cell_size = 75.0;
+    Vec3 origin{-9'600.0, 0.0, -9'600.0};
     std::uint64_t seed = 1;
 };
 
