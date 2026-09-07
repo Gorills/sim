@@ -47,7 +47,7 @@ msgid "HUD_PAUSED"
 msgstr "paused"
 
 msgid "HUD_CONTROLS_GOD"
-msgstr "WASD / left stick move · Q/E / LB/RB down/up · RMB / right stick camera · wheel changes flight speed · Shift / L3 boost · click minimap to teleport · Space / Start pause · 1/2/3 simulation speed"
+msgstr "WASD / left stick move · mouse / right stick orbit camera · Esc releases cursor · RMB recaptures · Q/E / LB/RB down/up · wheel changes speed · Shift / L3 boost · click minimap to teleport · Space / Start pause · 1/2/3 simulation speed"
 
 msgid "SEASON_WINTER"
 msgstr "winter"
