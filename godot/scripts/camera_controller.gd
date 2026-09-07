@@ -99,11 +99,17 @@ func toggle_overview() -> void:
 		_sync_render_interest(true)
 	else:
 		_overview_mode = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_overview_target = _desired_target
 		_overview_size = _overview_fit_size()
 		_desired_overview_size = _overview_size
 		_sync_render_interest(true)
 	view_mode_changed.emit(_overview_mode)
+
+
+func _exit_tree() -> void:
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _process(delta: float) -> void:
@@ -122,6 +128,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event.is_action_pressed(Actions.VIEW_TOGGLE_OVERVIEW) and not _is_echo(event):
 		toggle_overview()
+		get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed(Actions.CAMERA_ORBIT_DRAG) and not _overview_mode:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_released(Actions.CAMERA_ORBIT_DRAG):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
 		return
 
