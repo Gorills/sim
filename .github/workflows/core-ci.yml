@@ -29,3 +29,14 @@ jobs:
         run: cmake --build --preset debug --parallel 2
       - name: Test
         run: ctest --preset debug
+
+  gdextension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset debug-godot
+      - name: Build
+        run: cmake --build --preset debug-godot --parallel 2
+      - name: Test core through GDExtension preset
+        run: ctest --preset debug-godot
