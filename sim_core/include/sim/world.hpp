@@ -3,6 +3,7 @@
 #include "sim/command.hpp"
 #include "sim/habitat.hpp"
 #include "sim/snapshot.hpp"
+#include "sim/simulation_lod.hpp"
 #include "sim/species.hpp"
 #include "sim/types.hpp"
 
@@ -25,6 +26,19 @@ struct WorldConfig {
     double climate_start_hour = 24.0 * 120.0 + 8.0;
     std::uint64_t seed = 42;
     std::size_t max_entities = 100'000;
+    bool simulation_lod_enabled = false;
+    SimulationLodConfig simulation_lod{};
+};
+
+struct SimulationWorkStats {
+    std::uint64_t tick = 0;
+    std::size_t organism_entities = 0;
+    std::size_t individual_entities = 0;
+    std::size_t cohort_entities = 0;
+    std::size_t aggregate_entities = 0;
+    std::size_t updated_entities = 0;
+    std::size_t deferred_entities = 0;
+    double max_catchup_hours = 0.0;
 };
 
 struct SpeciesPopulation {
@@ -94,6 +108,18 @@ public:
     void set_paused(bool paused) noexcept;
     void set_tick_dt(double tick_dt);
     void set_ecology_hours_per_tick(double hours);
+    void configure_simulation_lod(SimulationLodConfig config,
+                                  Vec3 observer,
+                                  bool enabled = true);
+    void set_simulation_observer(Vec3 observer) noexcept;
+    void set_simulation_lod_enabled(bool enabled) noexcept;
+    [[nodiscard]] bool simulation_lod_enabled() const noexcept {
+        return simulation_lod_enabled_;
+    }
+    [[nodiscard]] SimulationLodSummary simulation_lod_summary() const;
+    [[nodiscard]] const SimulationWorkStats& simulation_work_stats() const noexcept {
+        return simulation_work_stats_;
+    }
 
     [[nodiscard]] Snapshot snapshot() const;
     [[nodiscard]] Snapshot snapshot(Vec3 center, double radius) const;
@@ -125,9 +151,11 @@ private:
     void apply_one(const DespawnCommand& cmd);
     void integrate();
     void update_canopy_and_light();
-    void update_plants(double hours);
-    void update_animals(double hours);
+    void update_plants();
+    void update_animals();
     void rebuild_spatial_index();
+    [[nodiscard]] std::optional<double> scheduled_ecology_hours(Entity& entity);
+    void record_lod_entity(SimulationLod lod, bool updated, double catchup_hours);
     void update_one_animal(std::size_t index, double hours);
     void consume_target(Entity& consumer,
                         Entity& food,
@@ -179,6 +207,10 @@ private:
     WorldConfig config_{};
     SpeciesCatalog species_{};
     HabitatGrid habitat_{};
+    SimulationLodGrid simulation_lod_grid_;
+    Vec3 simulation_observer_{};
+    bool simulation_lod_enabled_ = false;
+    SimulationWorkStats simulation_work_stats_{};
     std::uint64_t tick_index_ = 0;
     double simulated_hours_ = 0.0;
     EntityId next_id_ = 1;
