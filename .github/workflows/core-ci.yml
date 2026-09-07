@@ -103,7 +103,11 @@ jobs:
       - name: Check visualization contracts
         run: |
           GODOT="$RUNNER_TEMP/godot-$GODOT_VERSION/Godot_v$GODOT_VERSION-stable_linux.x86_64"
-          "$GODOT" --headless --path godot -s res://scripts/check_extension.gd
+          set -o pipefail
+          "$GODOT" --headless --path godot --quit-after 10 -s res://scripts/check_extension.gd 2>&1 | tee /tmp/godot-check.log
+          if grep -E "SCRIPT ERROR|ERROR:" /tmp/godot-check.log; then
+            exit 1
+          fi
 
       - name: Smoke-run Godot project
         run: |
