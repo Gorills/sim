@@ -234,8 +234,6 @@ func _present_organisms() -> void:
 
 
 func _refresh_catalog() -> void:
-
-func _refresh_catalog() -> void:
 	_catalog.clear()
 	_color_by_species.clear()
 	_shape_by_species.clear()
@@ -938,8 +936,6 @@ func _organism_transform(entity: Object, species_id: int, entity_id: int) -> Tra
 	)
 	return Transform3D(basis, position + Vector3.UP * 0.015)
 
-
-func _ensure_multimesh_capacity(multimesh: MultiMesh, required: int) -> void:
 
 func _ensure_multimesh_capacity(multimesh: MultiMesh, required: int) -> void:
 	if required <= multimesh.instance_count:
