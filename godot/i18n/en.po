@@ -19,6 +19,9 @@ msgstr "Species"
 msgid "UI_VIEW_GOD"
 msgstr "GOD VIEW"
 
+msgid "UI_VIEW_THIRD_PERSON_GOD"
+msgstr "THIRD PERSON · GOD MODE"
+
 msgid "HUD_SIMULATION"
 msgstr "day %.2f · %s · %s · %.0fx · entities %s · %s"
 
@@ -44,7 +47,7 @@ msgid "HUD_PAUSED"
 msgstr "paused"
 
 msgid "HUD_CONTROLS_GOD"
-msgstr "WASD / left stick fly · Q/E / LB/RB down/up · RMB / right stick look · wheel changes camera speed · Shift / L3 boost · Space / Start pause · 1/2/3 simulation speed"
+msgstr "WASD / left stick move · Q/E / LB/RB down/up · RMB / right stick camera · wheel changes flight speed · Shift / L3 boost · click minimap to teleport · Space / Start pause · 1/2/3 simulation speed"
 
 msgid "SEASON_WINTER"
 msgstr "winter"
