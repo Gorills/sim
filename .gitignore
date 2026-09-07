@@ -6,7 +6,6 @@ compile_commands.json
 CMakeUserPresets.json
 
 godot/.godot/
-godot/**/*.translation
 godot/bin/*.so
 godot/bin/*.dll
 godot/bin/*.dylib
