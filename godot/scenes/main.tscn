@@ -1,8 +1,9 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/world_view.gd" id="2_view"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/world_minimap.gd" id="5_minimap"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSky_main"]
 sky_top_color = Color(0.16, 0.34, 0.52, 1)
@@ -26,7 +27,7 @@ tonemap_mode = 2
 fog_enabled = true
 fog_light_color = Color(0.64, 0.72, 0.70, 1)
 fog_light_energy = 0.45
-fog_density = 0.00035
+fog_density = 0.002
 fog_sky_affect = 0.55
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
@@ -38,11 +39,28 @@ albedo_color = Color(0.08, 0.30, 0.38, 0.94)
 roughness = 0.28
 metallic = 0.02
 
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_avatar"]
+radius = 0.38
+height = 1.8
+radial_segments = 10
+rings = 4
+
+[sub_resource type="StandardMaterial3D" id="AvatarMat"]
+albedo_color = Color(0.82, 0.80, 0.67, 1)
+roughness = 0.92
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
 [node name="WorldView" type="Node3D" parent="."]
 script = ExtResource("2_view")
+
+[node name="SpectatorAvatar" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="SpectatorAvatar"]
+cast_shadow = 1
+mesh = SubResource("CapsuleMesh_avatar")
+surface_material_override/0 = SubResource("AvatarMat")
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.737277, 0.67559, 0, -0.67559, 0.737277, 0, 22, 34)
@@ -70,6 +88,8 @@ surface_material_override/0 = SubResource("OceanMat")
 script = ExtResource("4_camera")
 camera_path = NodePath("../Camera3D")
 sun_path = NodePath("../DirectionalLight3D")
+avatar_path = NodePath("../SpectatorAvatar")
+world_view_path = NodePath("../WorldView")
 
 [node name="HudLayer" type="CanvasLayer" parent="."]
 
@@ -137,4 +157,23 @@ text = "HUD_CONTROLS_GOD"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
+
+
+[node name="MinimapPanel" type="PanelContainer" parent="HudLayer"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -278.0
+offset_top = -332.0
+offset_right = -12.0
+offset_bottom = -66.0
+mouse_filter = 0
+
+[node name="WorldMinimap" type="Control" parent="HudLayer/MinimapPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 2
+mouse_filter = 0
+script = ExtResource("5_minimap")
 

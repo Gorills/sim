@@ -19,6 +19,8 @@ using namespace godot;
 
 namespace {
 
+constexpr double kEcologyHoursPerRealSecond = 0.25;
+
 PackedFloat32Array to_packed_floats(const std::vector<double>& values) {
     PackedFloat32Array out;
     out.resize(static_cast<int64_t>(values.size()));
@@ -49,14 +51,16 @@ PackedInt32Array to_packed_ints(const std::vector<std::uint32_t>& values) {
 } // namespace
 
 SimWorld::SimWorld() {
-    // At 60 visual ticks per second this yields 15 simulated minutes per real second.
-    // Faster ecological observation remains available through speed_scale.
-    config_.ecology_hours_per_tick = 1.0 / 240.0;
+    // Ecology can run below render FPS while preserving simulated time per real
+    // second. Faster observation remains available through speed_scale.
+    config_.ecology_hours_per_tick = config_.tick_dt * kEcologyHoursPerRealSecond;
 }
 
 void SimWorld::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_tick_hz"), &SimWorld::get_tick_hz);
     ClassDB::bind_method(D_METHOD("set_tick_hz", "hz"), &SimWorld::set_tick_hz);
+    ClassDB::bind_method(D_METHOD("get_ecology_hours_per_tick"),
+                         &SimWorld::get_ecology_hours_per_tick);
     ClassDB::bind_method(D_METHOD("is_paused"), &SimWorld::is_paused);
     ClassDB::bind_method(D_METHOD("set_paused", "paused"), &SimWorld::set_paused);
     ClassDB::bind_method(D_METHOD("get_demo_agent_count"), &SimWorld::get_demo_agent_count);
@@ -129,14 +133,20 @@ void SimWorld::set_tick_hz(double hz) {
     }
     const double clamped = std::clamp(hz, 1.0, 1000.0);
     config_.tick_dt = 1.0 / clamped;
+    config_.ecology_hours_per_tick = config_.tick_dt * kEcologyHoursPerRealSecond;
     stepper_.set_tick_dt(config_.tick_dt);
     if (world_) {
         world_->set_tick_dt(config_.tick_dt);
+        world_->set_ecology_hours_per_tick(config_.ecology_hours_per_tick);
     }
 }
 
 double SimWorld::get_tick_hz() const {
     return 1.0 / config_.tick_dt;
+}
+
+double SimWorld::get_ecology_hours_per_tick() const {
+    return config_.ecology_hours_per_tick;
 }
 
 void SimWorld::set_paused(bool paused) {

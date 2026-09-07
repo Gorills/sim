@@ -93,6 +93,7 @@ public:
 
     void set_paused(bool paused) noexcept;
     void set_tick_dt(double tick_dt);
+    void set_ecology_hours_per_tick(double hours);
 
     [[nodiscard]] Snapshot snapshot() const;
     [[nodiscard]] Snapshot snapshot(Vec3 center, double radius) const;
@@ -101,6 +102,9 @@ public:
     [[nodiscard]] OverviewSnapshot overview_snapshot(std::size_t resolution = 96) const;
     [[nodiscard]] std::uint64_t tick_index() const noexcept { return tick_index_; }
     [[nodiscard]] double tick_dt() const noexcept { return config_.tick_dt; }
+    [[nodiscard]] double ecology_hours_per_tick() const noexcept {
+        return config_.ecology_hours_per_tick;
+    }
     [[nodiscard]] bool paused() const noexcept { return paused_; }
     [[nodiscard]] std::size_t entity_count() const noexcept { return entities_.size(); }
     [[nodiscard]] std::size_t entity_count(SpeciesId species_id) const noexcept;

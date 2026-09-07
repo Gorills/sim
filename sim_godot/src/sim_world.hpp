@@ -24,6 +24,7 @@ public:
 
     void set_tick_hz(double hz);
     [[nodiscard]] double get_tick_hz() const;
+    [[nodiscard]] double get_ecology_hours_per_tick() const;
 
     void set_paused(bool paused);
     [[nodiscard]] bool is_paused() const;

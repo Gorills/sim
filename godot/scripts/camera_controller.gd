@@ -1,39 +1,44 @@
 extends Node
 
-## Free-fly spectator camera. The camera only moves presentation interest:
-## simulation rules remain independent from the viewer.
+## Player-scale third-person spectator. God mode moves the avatar anchor freely,
+## while camera distance/FOV stay at the future player-view scale.
 
 const Actions = preload("res://scripts/input_actions.gd")
 
-const DEFAULT_ALTITUDE := 650.0
-const MIN_ALTITUDE := 24.0
-const MAX_ALTITUDE := 1100.0
-const DEFAULT_PITCH := deg_to_rad(-38.0)
-const MIN_PITCH := deg_to_rad(-88.0)
-const MAX_PITCH := deg_to_rad(82.0)
-const DEFAULT_SPEED := 420.0
-const MIN_SPEED := 80.0
-const MAX_SPEED := 1600.0
-const SPEED_STEP := 1.25
-const BOOST_FACTOR := 3.5
-const MOVE_RESPONSE := 9.0
-const LOOK_SPEED := 1.75
-const MOUSE_LOOK_SENSITIVITY := 0.0038
-const RENDER_RADIUS := 1200.0
-const STREAM_SHIFT_THRESHOLD := 550.0
-const STREAM_LOOK_AHEAD := 350.0
-const CAMERA_FAR := 4200.0
-const SHADOW_DISTANCE := 1800.0
+const CAMERA_DISTANCE := 7.0
+const CAMERA_FOCUS_HEIGHT := 1.35
+const DEFAULT_PITCH := deg_to_rad(-10.0)
+const MIN_PITCH := deg_to_rad(-45.0)
+const MAX_PITCH := deg_to_rad(22.0)
+const DEFAULT_SPEED := 12.0
+const MIN_SPEED := 4.0
+const MAX_SPEED := 120.0
+const SPEED_STEP := 1.30
+const BOOST_FACTOR := 5.0
+const MOVE_RESPONSE := 11.0
+const LOOK_SPEED := 1.85
+const MOUSE_LOOK_SENSITIVITY := 0.0035
+const GROUND_CLEARANCE := 0.9
+const MAX_WORLD_Y := 520.0
+
+const RENDER_RADIUS := 450.0
+const STREAM_SHIFT_THRESHOLD := 120.0
+const CAMERA_FAR := 650.0
+const SHADOW_DISTANCE := 350.0
 
 @export var camera_path: NodePath
 @export var sun_path: NodePath
+@export var avatar_path: NodePath
+@export var world_view_path: NodePath
 
-@onready var _camera: Camera3D = get_node(camera_path) as Camera3D
-@onready var _sun: DirectionalLight3D = get_node(sun_path) as DirectionalLight3D
+var _camera: Camera3D
+var _sun: DirectionalLight3D
+var _avatar: Node3D
+var _world_view: Node
 
 var _sim: Node
 var _world_bounds := Rect2(Vector2(-9600.0, -9600.0), Vector2(19200.0, 19200.0))
-var _position := Vector3.ZERO
+var _anchor_position := Vector3.ZERO
 var _velocity := Vector3.ZERO
 var _yaw := 0.0
 var _pitch := DEFAULT_PITCH
@@ -41,10 +46,29 @@ var _fly_speed := DEFAULT_SPEED
 var _last_stream_center := Vector3.INF
 
 
-func bind_sim(sim: Node, world_bounds: Rect2) -> void:
+func bind_sim(sim: Node, world_bounds: Rect2, spawn_position: Vector3) -> void:
+	_resolve_nodes()
+	if _camera == null or _avatar == null or _world_view == null:
+		push_error("CameraController paths are not resolved.")
+		return
 	_sim = sim
 	set_world_bounds(world_bounds)
-	reset_view()
+	_velocity = Vector3.ZERO
+	_yaw = 0.0
+	_pitch = DEFAULT_PITCH
+	_fly_speed = DEFAULT_SPEED
+	_anchor_position = _clamp_horizontal(spawn_position)
+	_last_stream_center = Vector3.INF
+	_sync_render_interest(true)
+	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
+	_apply_camera()
+
+
+func _resolve_nodes() -> void:
+	_camera = get_node_or_null(camera_path) as Camera3D
+	_sun = get_node_or_null(sun_path) as DirectionalLight3D
+	_avatar = get_node_or_null(avatar_path) as Node3D
+	_world_view = get_node_or_null(world_view_path)
 
 
 func set_world_bounds(world_bounds: Rect2) -> void:
@@ -53,20 +77,27 @@ func set_world_bounds(world_bounds: Rect2) -> void:
 	_world_bounds = world_bounds
 
 
-func reset_view() -> void:
-	var center := _world_bounds.get_center()
-	_position = Vector3(center.x, DEFAULT_ALTITUDE, center.y)
+func teleport_to(world_position: Vector3) -> void:
+	if _sim == null:
+		return
 	_velocity = Vector3.ZERO
-	_yaw = 0.0
-	_pitch = DEFAULT_PITCH
-	_fly_speed = DEFAULT_SPEED
-	_last_stream_center = Vector3.INF
-	_apply_camera()
+	_anchor_position = _clamp_horizontal(world_position)
 	_sync_render_interest(true)
+	_refresh_world_view()
+	_anchor_position.y = _ground_height(_anchor_position) + GROUND_CLEARANCE
+	_apply_camera()
+
+
+func anchor_position() -> Vector3:
+	return _anchor_position
 
 
 func render_radius() -> float:
 	return RENDER_RADIUS
+
+
+func camera_distance() -> float:
+	return CAMERA_DISTANCE
 
 
 func fly_speed() -> float:
@@ -82,18 +113,25 @@ func _process(delta: float) -> void:
 	if _sim == null or _camera == null:
 		return
 
+	if _camera_input_allowed():
+		_apply_gamepad_look(delta)
+
 	var desired_velocity := Vector3.ZERO
 	if _camera_input_allowed():
 		desired_velocity = _movement_velocity()
 
 	var response := 1.0 - exp(-MOVE_RESPONSE * delta)
 	_velocity = _velocity.lerp(desired_velocity, response)
-	_position += _velocity * delta
-	_position = _clamp_position(_position)
+	_anchor_position += _velocity * delta
+	_anchor_position = _clamp_horizontal(_anchor_position)
+	_anchor_position.y = clampf(
+		_anchor_position.y,
+		_ground_height(_anchor_position) + GROUND_CLEARANCE,
+		MAX_WORLD_Y
+	)
 
-	_apply_gamepad_look(delta)
-	_apply_camera()
 	_sync_render_interest(false)
+	_apply_camera()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -136,18 +174,12 @@ func _movement_velocity() -> Vector3:
 		Actions.CAMERA_MOVE_FORWARD,
 		Actions.CAMERA_MOVE_BACK
 	)
-	var forward := _look_direction()
-	forward.y = 0.0
-	if forward.length_squared() < 0.0001:
-		forward = Vector3.FORWARD
-	else:
-		forward = forward.normalized()
+	var forward := Vector3(sin(_yaw), 0.0, -cos(_yaw))
 	var right := forward.cross(Vector3.UP).normalized()
 	var vertical := (
 		Input.get_action_strength(Actions.CAMERA_MOVE_UP)
 		- Input.get_action_strength(Actions.CAMERA_MOVE_DOWN)
 	)
-
 	var direction := right * move.x + forward * -move.y + Vector3.UP * vertical
 	if direction.length_squared() > 1.0:
 		direction = direction.normalized()
@@ -159,8 +191,6 @@ func _movement_velocity() -> Vector3:
 
 
 func _apply_gamepad_look(delta: float) -> void:
-	if not _camera_input_allowed():
-		return
 	var look := Input.get_vector(
 		Actions.CAMERA_LOOK_LEFT,
 		Actions.CAMERA_LOOK_RIGHT,
@@ -178,12 +208,21 @@ func _apply_gamepad_look(delta: float) -> void:
 
 
 func _apply_camera() -> void:
+	var focus := _anchor_position + Vector3.UP * CAMERA_FOCUS_HEIGHT
+	var direction := _look_direction()
+	var camera_position := focus - direction * CAMERA_DISTANCE
+	var camera_ground := _ground_height(camera_position) + 0.45
+	camera_position.y = maxf(camera_position.y, camera_ground)
+
 	_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
-	_camera.near = 0.5
+	_camera.near = 0.10
 	_camera.far = CAMERA_FAR
-	_camera.fov = 55.0
-	_camera.position = _position
-	_camera.look_at(_position + _look_direction(), Vector3.UP)
+	_camera.fov = 68.0
+	_camera.look_at_from_position(camera_position, focus, Vector3.UP)
+
+	if _avatar != null:
+		_avatar.position = _anchor_position
+		_avatar.rotation.y = _yaw
 	if _sun != null:
 		_sun.directional_shadow_max_distance = SHADOW_DISTANCE
 
@@ -200,17 +239,7 @@ func _look_direction() -> Vector3:
 func _sync_render_interest(force: bool) -> void:
 	if _sim == null:
 		return
-
-	var forward := _look_direction()
-	forward.y = 0.0
-	if forward.length_squared() > 0.0001:
-		forward = forward.normalized()
-	var center := Vector3(
-		_position.x + forward.x * STREAM_LOOK_AHEAD,
-		0.0,
-		_position.z + forward.z * STREAM_LOOK_AHEAD
-	)
-	center = _clamp_interest_center(center)
+	var center := Vector3(_anchor_position.x, 0.0, _anchor_position.z)
 	var moved_far_enough := (
 		_last_stream_center == Vector3.INF
 		or center.distance_squared_to(_last_stream_center)
@@ -224,20 +253,24 @@ func _sync_render_interest(force: bool) -> void:
 	_last_stream_center = center
 	if _sim.has_method("refresh_render_interest"):
 		_sim.call("refresh_render_interest")
+	_refresh_world_view()
 
 
-func _clamp_position(position: Vector3) -> Vector3:
+func _refresh_world_view() -> void:
+	if _world_view != null and _world_view.has_method("refresh_interest_now"):
+		_world_view.call("refresh_interest_now")
+
+
+func _ground_height(world_position: Vector3) -> float:
+	if _world_view != null and _world_view.has_method("presentation_height"):
+		return float(_world_view.call("presentation_height", world_position))
+	return 0.0
+
+
+func _clamp_horizontal(position: Vector3) -> Vector3:
 	position.x = clampf(position.x, _world_bounds.position.x, _world_bounds.end.x)
 	position.z = clampf(position.z, _world_bounds.position.y, _world_bounds.end.y)
-	position.y = clampf(position.y, MIN_ALTITUDE, MAX_ALTITUDE)
 	return position
-
-
-func _clamp_interest_center(center: Vector3) -> Vector3:
-	center.x = clampf(center.x, _world_bounds.position.x, _world_bounds.end.x)
-	center.z = clampf(center.z, _world_bounds.position.y, _world_bounds.end.y)
-	center.y = 0.0
-	return center
 
 
 func _camera_input_allowed() -> bool:

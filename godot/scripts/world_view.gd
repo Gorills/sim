@@ -1,8 +1,8 @@
 extends Node3D
 
-## Presentation-only: island terrain from habitat arrays and batched organisms.
-## Canonical rules stay in sim_core. Terrain3D (or ArrayMesh fallback) only
-## displays the projected heightmap; organisms instance from the same snapshot.
+## Player-scale presentation only. Canonical rules stay in sim_core.
+## A small local ArrayMesh is rebuilt around render interest; no global terrain
+## renderer or Terrain3D region streaming participates in the runtime view.
 
 const SURFACE_LAND := 0
 const SURFACE_OCEAN := 1
@@ -40,9 +40,6 @@ const PALETTE := {
 var _sim: Node
 var _mesh_terrain: MeshInstance3D
 var _terrain_material: StandardMaterial3D
-var _terrain3d: Node
-var _terrain3d_region_keys: Dictionary = {}
-var _terrain3d_cell_size := 0.0
 var _fresh_water: MeshInstance3D
 var _batches: Dictionary = {}
 var _catalog: Dictionary = {}
@@ -54,8 +51,8 @@ var _material_cache: Dictionary = {}
 const ORGANISM_MESH_DIR := "res://assets/organisms/"
 const RELIEF := 420.0
 const ORGANISM_REFRESH_SEC := 0.05
-const TERRAIN_APPEARANCE_REFRESH_SEC := 4.0
-const TERRAIN3D_REGION_SIZE := 64
+const TERRAIN_APPEARANCE_REFRESH_SEC := 5.0
+const TERRAIN_SUBDIVISIONS := 4
 const SAND := Color("#8f8058")
 const SOIL := Color("#66543b")
 const TRUNK := Color("#59442f")
@@ -68,6 +65,7 @@ var _habitat: Object
 var _terrain_clock: float = 999.0
 var _organism_clock: float = 999.0
 var _last_interest_center := Vector3.INF
+var _terrain_vertex_count := 0
 var _terrain_heights := PackedFloat32Array()
 var _terrain_colors := PackedColorArray()
 
@@ -101,56 +99,33 @@ func legend_lines() -> PackedStringArray:
 	return lines
 
 
-func uses_terrain3d() -> bool:
-	if _terrain3d == null:
-		return false
-	var data: Object = _terrain3d_data()
-	return data != null and int(data.call("get_region_count")) > 0
-
-
-func terrain3d_debug() -> String:
-	if not ClassDB.class_exists("Terrain3D"):
-		return "no_class"
-	if _terrain3d == null:
-		return "no_node"
-	var data: Object = _terrain3d_data()
-	if data == null:
-		return "no_data tree=%s" % str(_terrain3d.is_inside_tree())
-	return "regions=%s region_size=%s tree=%s" % [
-		str(data.call("get_region_count")),
-		str(terrain3d_region_size()),
-		str(_terrain3d.is_inside_tree()),
-	]
-
-
-func terrain3d_region_size() -> int:
-	return int(_terrain3d.get("region_size")) if _terrain3d != null else 0
-
-
-func terrain3d_region_count() -> int:
-	var data: Object = _terrain3d_data()
-	return int(data.call("get_region_count")) if data != null else 0
-
-
 func set_detail_active(active: bool) -> void:
 	visible = active
 	set_process(active)
 	if active and _sim != null:
-		_terrain_clock = 999.0
-		_refresh_terrain(true)
+		refresh_interest_now()
 
 
-func _terrain3d_data() -> Object:
-	if _terrain3d == null:
-		return null
-	if _terrain3d.has_method("get_data"):
-		var via_call: Variant = _terrain3d.call("get_data")
-		if via_call != null:
-			return via_call
-	var via_prop: Variant = _terrain3d.get("data")
-	if via_prop != null:
-		return via_prop
-	return null
+func refresh_interest_now() -> void:
+	if _sim == null:
+		return
+	_last_interest_center = _sim.get("render_center") as Vector3
+	_refresh_terrain(true)
+	_terrain_clock = 0.0
+
+
+func presentation_height(world_position: Vector3) -> float:
+	return _sampled_terrain_height(world_position)
+
+
+func terrain_vertex_count() -> int:
+	return _terrain_vertex_count
+
+
+func render_grid_size() -> Vector2i:
+	if _habitat == null:
+		return Vector2i.ZERO
+	return Vector2i(int(_habitat.get("width")), int(_habitat.get("height")))
 
 
 func _ready() -> void:
@@ -177,8 +152,7 @@ func _ensure_visual_nodes() -> void:
 	water_material.metallic = 0.02
 	_fresh_water.material_override = water_material
 	add_child(_fresh_water)
-	if ClassDB.class_exists("Terrain3D"):
-		_mesh_terrain.visible = false
+	_mesh_terrain.visible = true
 
 
 func _process(delta: float) -> void:
@@ -530,61 +504,21 @@ func _capsule(radius: float, height: float) -> CapsuleMesh:
 	return mesh
 
 
-func _create_terrain3d(cell_size: float) -> void:
-	if _terrain3d != null and is_equal_approx(_terrain3d_cell_size, cell_size):
-		return
-	if _terrain3d != null:
-		if _terrain3d.get_parent() == self:
-			remove_child(_terrain3d)
-		_terrain3d.free()
-		_terrain3d = null
-
-	_terrain3d_region_keys.clear()
-	_terrain3d_cell_size = 0.0
-	_terrain3d = ClassDB.instantiate("Terrain3D") as Node
-	if _terrain3d == null:
-		return
-
-	_terrain3d.name = "IslandTerrain3D"
-	_terrain3d.set("collision_mode", 0)
-	_terrain3d.set("show_colormap", true)
-	_terrain3d.set("cast_shadows", GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
-	_terrain3d.set("vertex_spacing", cell_size)
-	add_child(_terrain3d)
-	_terrain3d.call("change_region_size", TERRAIN3D_REGION_SIZE)
-	_terrain3d_cell_size = cell_size
-
-	var material: Object = (
-		_terrain3d.call("get_material")
-		if _terrain3d.has_method("get_material")
-		else null
-	)
-	if material != null:
-		material.set("show_colormap", true)
-		material.set("world_background", 0)
-
-
 func _has_terrain_visual() -> bool:
-	if _terrain3d != null:
-		return uses_terrain3d()
 	return _mesh_terrain != null and _mesh_terrain.mesh != null
 
 
 func _refresh_terrain(force: bool) -> void:
-	if _sim == null or not _sim.has_method("get_habitat_grid"):
+	if _sim == null or not _sim.has_method("get_render_habitat_grid"):
 		return
-	var habitat: Object = (
-		_sim.call("get_render_habitat_grid")
-		if _sim.has_method("get_render_habitat_grid")
-		else _sim.call("get_habitat_grid")
-	)
+	var habitat: Object = _sim.call("get_render_habitat_grid")
 	if habitat == null:
 		return
 	var width := int(habitat.get("width"))
 	var height := int(habitat.get("height"))
 	if width <= 0 or height <= 0:
 		return
-	_habitat = habitat
+
 	var region_origin: Vector3 = habitat.get("origin")
 	var signature := "%s:%s:%s:%.2f:%.2f" % [
 		width,
@@ -594,12 +528,15 @@ func _refresh_terrain(force: bool) -> void:
 		region_origin.z,
 	]
 	var geometry_changed := signature != _terrain_signature or not _has_terrain_visual()
-	if force or geometry_changed or _terrain_clock >= TERRAIN_APPEARANCE_REFRESH_SEC:
-		_terrain_signature = signature
-		_build_terrain_mesh(habitat, force or geometry_changed)
+	if not force and not geometry_changed and _terrain_clock < TERRAIN_APPEARANCE_REFRESH_SEC:
+		return
+
+	_habitat = habitat
+	_terrain_signature = signature
+	_build_terrain_mesh(habitat)
 
 
-func _build_terrain_mesh(habitat: Object, rebuild_geometry: bool = true) -> void:
+func _build_terrain_mesh(habitat: Object) -> void:
 	var width := int(habitat.get("width"))
 	var height := int(habitat.get("height"))
 	var cell_size := float(habitat.get("cell_size"))
@@ -613,9 +550,9 @@ func _build_terrain_mesh(habitat: Object, rebuild_geometry: bool = true) -> void
 	if elevation.size() != width * height or surface.size() != elevation.size():
 		return
 
-	var vertex_count := (width + 1) * (height + 1)
-	_terrain_heights.resize(vertex_count)
-	_terrain_colors.resize(vertex_count)
+	var base_vertex_count := (width + 1) * (height + 1)
+	_terrain_heights.resize(base_vertex_count)
+	_terrain_colors.resize(base_vertex_count)
 	for vertex_z in range(height + 1):
 		for vertex_x in range(width + 1):
 			var sample := _terrain_vertex_sample(
@@ -632,50 +569,95 @@ func _build_terrain_mesh(habitat: Object, rebuild_geometry: bool = true) -> void
 			)
 			var vertex_index := vertex_z * (width + 1) + vertex_x
 			_terrain_heights[vertex_index] = sample.w
-			_terrain_colors[vertex_index] = Color(sample.x, sample.y, sample.z, 0.5)
+			_terrain_colors[vertex_index] = Color(sample.x, sample.y, sample.z)
 
-	if rebuild_geometry:
-		_build_fresh_water_mesh(habitat)
-	if ClassDB.class_exists("Terrain3D"):
-		if _terrain3d == null or not is_equal_approx(_terrain3d_cell_size, cell_size):
-			_create_terrain3d(cell_size)
-			_mesh_terrain.mesh = null
-			_mesh_terrain.visible = false
-		_upload_terrain3d(habitat, rebuild_geometry)
-		if uses_terrain3d():
-			return
-
-	_mesh_terrain.visible = true
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for vertex_z in range(height + 1):
-		for vertex_x in range(width + 1):
-			var vertex_index := vertex_z * (width + 1) + vertex_x
-			st.set_color(_terrain_colors[vertex_index])
-			st.add_vertex(Vector3(
-				origin.x + float(vertex_x) * cell_size,
-				_terrain_heights[vertex_index],
-				origin.z + float(vertex_z) * cell_size
-			))
+	var out_index := 0
 	for z in range(height):
 		for x in range(width):
-			var cell_index := z * width + x
-			if int(surface[cell_index]) != SURFACE_LAND:
+			if int(surface[z * width + x]) != SURFACE_LAND:
 				continue
-			var top_left := z * (width + 1) + x
-			var top_right := top_left + 1
-			var bottom_left := (z + 1) * (width + 1) + x
-			var bottom_right := bottom_left + 1
-			st.add_index(top_left)
-			st.add_index(top_right)
-			st.add_index(bottom_right)
-			st.add_index(top_left)
-			st.add_index(bottom_right)
-			st.add_index(bottom_left)
-	st.generate_normals()
-	var mesh := st.commit()
-	_mesh_terrain.mesh = mesh
-	_mesh_terrain.material_override = _terrain_material
+			for sub_z in range(TERRAIN_SUBDIVISIONS):
+				for sub_x in range(TERRAIN_SUBDIVISIONS):
+					var u0 := float(sub_x) / float(TERRAIN_SUBDIVISIONS)
+					var u1 := float(sub_x + 1) / float(TERRAIN_SUBDIVISIONS)
+					var v0 := float(sub_z) / float(TERRAIN_SUBDIVISIONS)
+					var v1 := float(sub_z + 1) / float(TERRAIN_SUBDIVISIONS)
+					var samples: Array[Vector2] = [
+						Vector2(u0, v0),
+						Vector2(u1, v0),
+						Vector2(u1, v1),
+						Vector2(u0, v1),
+					]
+					for uv: Vector2 in samples:
+						var local_x: float = float(x) + uv.x
+						var local_z: float = float(z) + uv.y
+						st.set_color(_interpolated_base_color(local_x, local_z, width, height))
+						st.add_vertex(Vector3(
+							origin.x + local_x * cell_size,
+							_interpolated_base_height(local_x, local_z, width, height),
+							origin.z + local_z * cell_size
+						))
+					st.add_index(out_index)
+					st.add_index(out_index + 1)
+					st.add_index(out_index + 2)
+					st.add_index(out_index)
+					st.add_index(out_index + 2)
+					st.add_index(out_index + 3)
+					out_index += 4
+
+	if out_index == 0:
+		_mesh_terrain.mesh = null
+		_terrain_vertex_count = 0
+	else:
+		st.generate_normals()
+		_mesh_terrain.mesh = st.commit()
+		_mesh_terrain.material_override = _terrain_material
+		_terrain_vertex_count = out_index
+	_build_fresh_water_mesh(habitat)
+
+
+func _interpolated_base_height(
+	local_x: float,
+	local_z: float,
+	width: int,
+	height: int
+) -> float:
+	var x0 := clampi(int(floor(local_x)), 0, width - 1)
+	var z0 := clampi(int(floor(local_z)), 0, height - 1)
+	var x1 := x0 + 1
+	var z1 := z0 + 1
+	var tx := clampf(local_x - float(x0), 0.0, 1.0)
+	var tz := clampf(local_z - float(z0), 0.0, 1.0)
+	var stride := width + 1
+	var top := lerpf(_terrain_heights[z0 * stride + x0], _terrain_heights[z0 * stride + x1], tx)
+	var bottom := lerpf(_terrain_heights[z1 * stride + x0], _terrain_heights[z1 * stride + x1], tx)
+	return lerpf(top, bottom, tz)
+
+
+func _interpolated_base_color(
+	local_x: float,
+	local_z: float,
+	width: int,
+	height: int
+) -> Color:
+	var x0 := clampi(int(floor(local_x)), 0, width - 1)
+	var z0 := clampi(int(floor(local_z)), 0, height - 1)
+	var x1 := x0 + 1
+	var z1 := z0 + 1
+	var tx := clampf(local_x - float(x0), 0.0, 1.0)
+	var tz := clampf(local_z - float(z0), 0.0, 1.0)
+	var stride := width + 1
+	var top := _terrain_colors[z0 * stride + x0].lerp(
+		_terrain_colors[z0 * stride + x1],
+		tx
+	)
+	var bottom := _terrain_colors[z1 * stride + x0].lerp(
+		_terrain_colors[z1 * stride + x1],
+		tx
+	)
+	return top.lerp(bottom, tz)
 
 
 func _build_fresh_water_mesh(habitat: Object) -> void:
@@ -686,7 +668,6 @@ func _build_fresh_water_mesh(habitat: Object) -> void:
 	var surface: PackedByteArray = habitat.get("surface")
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var fresh_color := Color("#2d6670")
 	var has_fresh := false
 	var vertex_index := 0
 	for z in range(height):
@@ -698,20 +679,18 @@ func _build_fresh_water_mesh(habitat: Object) -> void:
 			var z0 := origin.z + float(z) * cell_size
 			var x1 := x0 + cell_size
 			var z1 := z0 + cell_size
-			var stride := width + 1
-			var water_y := (
-				_terrain_heights[z * stride + x]
-				+ _terrain_heights[(z + 1) * stride + x]
-				+ _terrain_heights[(z + 1) * stride + x + 1]
-				+ _terrain_heights[z * stride + x + 1]
-			) * 0.25 + 0.18
+			var water_y := _interpolated_base_height(
+				float(x) + 0.5,
+				float(z) + 0.5,
+				width,
+				height
+			) + 0.18
 			for point in [
 				Vector3(x0, water_y, z0),
 				Vector3(x0, water_y, z1),
 				Vector3(x1, water_y, z1),
 				Vector3(x1, water_y, z0),
 			]:
-				st.set_color(fresh_color)
 				st.add_vertex(point)
 			st.add_index(vertex_index)
 			st.add_index(vertex_index + 3)
@@ -725,84 +704,6 @@ func _build_fresh_water_mesh(habitat: Object) -> void:
 		return
 	st.generate_normals()
 	_fresh_water.mesh = st.commit()
-
-
-func _upload_terrain3d(habitat: Object, rebuild_geometry: bool) -> void:
-	if _terrain3d == null:
-		return
-	var data: Object = _terrain3d_data()
-	if data == null:
-		return
-
-	var width := int(habitat.get("width"))
-	var height := int(habitat.get("height"))
-	var cell_size := float(habitat.get("cell_size"))
-	var origin: Vector3 = habitat.get("origin")
-	if rebuild_geometry:
-		_sync_terrain3d_regions(data, origin, width, height, cell_size)
-
-	for vertex_z in range(height + 1):
-		for vertex_x in range(width + 1):
-			var vertex_index := vertex_z * (width + 1) + vertex_x
-			var pos := Vector3(
-				origin.x + float(vertex_x) * cell_size,
-				0.0,
-				origin.z + float(vertex_z) * cell_size
-			)
-			if rebuild_geometry:
-				data.call("set_height", pos, _terrain_heights[vertex_index])
-			data.call("set_color", pos, _terrain_colors[vertex_index])
-
-	if data.has_method("update_maps"):
-		data.call("update_maps")
-	elif data.has_method("force_update_maps"):
-		data.call("force_update_maps")
-	if rebuild_geometry and data.has_method("calc_height_range"):
-		data.call("calc_height_range", true)
-
-
-func _sync_terrain3d_regions(
-	data: Object,
-	origin: Vector3,
-	width: int,
-	height: int,
-	cell_size: float
-) -> void:
-	var region_world_size := float(TERRAIN3D_REGION_SIZE) * cell_size
-	if region_world_size <= 0.0:
-		return
-
-	var max_world := origin + Vector3(
-		float(width) * cell_size,
-		0.0,
-		float(height) * cell_size
-	)
-	var min_region_x := int(floor(origin.x / region_world_size))
-	var min_region_z := int(floor(origin.z / region_world_size))
-	var max_region_x := int(floor(max_world.x / region_world_size))
-	var max_region_z := int(floor(max_world.z / region_world_size))
-
-	var wanted: Dictionary = {}
-	for region_z in range(min_region_z, max_region_z + 1):
-		for region_x in range(min_region_x, max_region_x + 1):
-			var key := Vector2i(region_x, region_z)
-			wanted[key] = true
-
-	for key in _terrain3d_region_keys.keys():
-		if wanted.has(key):
-			continue
-		data.call("remove_regionl", key, false)
-
-	for key in wanted.keys():
-		if _terrain3d_region_keys.has(key):
-			continue
-		var existing: Variant = data.call("get_region", key)
-		if existing != null:
-			data.call("add_region", existing, false)
-		else:
-			data.call("add_region_blank", key, false)
-
-	_terrain3d_region_keys = wanted
 
 
 func _terrain_vertex_sample(
@@ -907,16 +808,7 @@ func _sampled_terrain_height(sim_position: Vector3) -> float:
 		return 0.0
 	var local_x := clampf((sim_position.x - origin.x) / cell_size, 0.0, float(width))
 	var local_z := clampf((sim_position.z - origin.z) / cell_size, 0.0, float(height))
-	var x0 := clampi(int(floor(local_x)), 0, width - 1)
-	var z0 := clampi(int(floor(local_z)), 0, height - 1)
-	var x1 := x0 + 1
-	var z1 := z0 + 1
-	var tx := clampf(local_x - float(x0), 0.0, 1.0)
-	var tz := clampf(local_z - float(z0), 0.0, 1.0)
-	var stride := width + 1
-	var top := lerpf(_terrain_heights[z0 * stride + x0], _terrain_heights[z0 * stride + x1], tx)
-	var bottom := lerpf(_terrain_heights[z1 * stride + x0], _terrain_heights[z1 * stride + x1], tx)
-	return lerpf(top, bottom, tz)
+	return _interpolated_base_height(local_x, local_z, width, height)
 
 
 func _cell_color(
