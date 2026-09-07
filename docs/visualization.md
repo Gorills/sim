@@ -39,9 +39,12 @@ whole-island mode. The spectator may fly anywhere inside the island bounds, but
 only the area around the current camera position is presented in detail.
 
 The render-interest radius is fixed at 1.2 km. Camera altitude and camera speed
-never increase that radius. The render center only moves after the camera has
-travelled 550 m from the previous center, providing hysteresis and avoiding
-terrain rebuilds from small movements.
+never increase that radius. Spectator altitude is capped at 1.1 km and the
+streaming center sits 350 m ahead of the camera's horizontal look direction, so
+the normal downward sightline remains inside loaded terrain instead of exposing
+only the ocean/background. The render center only changes after the desired
+center has moved 550 m, providing hysteresis and avoiding rebuilds from small
+movement or look changes.
 
 This is the first camera contract for the future third-person viewer: movement
 and look intents are already device-independent, while spectator-only vertical
