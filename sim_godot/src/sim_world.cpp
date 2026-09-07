@@ -420,6 +420,16 @@ godot::Dictionary SimWorld::get_simulation_lod_stats() const {
     out["cohort_regions"] = static_cast<int64_t>(lod.cohort_regions);
     out["aggregate_regions"] = static_cast<int64_t>(lod.aggregate_regions);
     out["due_regions"] = static_cast<int64_t>(lod.due_regions);
+
+    const sim::SimulationWorkStats& work = frame->simulation_work;
+    out["work_tick"] = static_cast<int64_t>(work.tick);
+    out["organism_entities"] = static_cast<int64_t>(work.organism_entities);
+    out["individual_entities"] = static_cast<int64_t>(work.individual_entities);
+    out["cohort_entities"] = static_cast<int64_t>(work.cohort_entities);
+    out["aggregate_entities"] = static_cast<int64_t>(work.aggregate_entities);
+    out["updated_entities"] = static_cast<int64_t>(work.updated_entities);
+    out["deferred_entities"] = static_cast<int64_t>(work.deferred_entities);
+    out["max_catchup_hours"] = work.max_catchup_hours;
     return out;
 }
 
