@@ -120,6 +120,13 @@ void World::set_tick_dt(double tick_dt) {
         std::isfinite(tick_dt) && tick_dt > 0.0 ? tick_dt : 1.0 / 60.0;
 }
 
+void World::set_ecology_hours_per_tick(double hours) {
+    if (!std::isfinite(hours) || hours <= 0.0) {
+        return;
+    }
+    config_.ecology_hours_per_tick = hours;
+}
+
 double World::absolute_hours() const noexcept {
     return simulated_hours_ + config_.climate_start_hour;
 }
