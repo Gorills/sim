@@ -257,6 +257,52 @@ godot::Ref<SimHabitatGrid> SimWorld::get_habitat_grid() const {
     return out;
 }
 
+godot::Ref<SimHabitatGrid> SimWorld::get_render_habitat_grid() const {
+    godot::Ref<SimHabitatGrid> out;
+    out.instantiate();
+    if (!world_) {
+        return out;
+    }
+    const sim::HabitatSnapshot habitat =
+        world_->habitat_snapshot(render_center_, render_radius_ * 1.15);
+    out->set_width(static_cast<int32_t>(habitat.width));
+    out->set_height(static_cast<int32_t>(habitat.height));
+    out->set_cell_size(habitat.cell_size);
+    out->set_origin(sim_godot::to_godot(habitat.origin));
+    out->set_elevation(to_packed_floats(habitat.elevation));
+    out->set_moisture(to_packed_floats(habitat.moisture));
+    out->set_nutrients(to_packed_floats(habitat.nutrients));
+    out->set_temperature(to_packed_floats(habitat.temperature));
+    out->set_canopy(to_packed_floats(habitat.canopy));
+    out->set_light(to_packed_floats(habitat.light));
+    out->set_organic(to_packed_floats(habitat.organic));
+    out->set_pollination(to_packed_floats(habitat.pollination));
+    out->set_surface(to_packed_bytes(habitat.surface));
+    return out;
+}
+
+godot::Dictionary SimWorld::get_world_overview(int32_t resolution) const {
+    Dictionary out;
+    if (!world_) {
+        return out;
+    }
+    const sim::OverviewSnapshot overview =
+        world_->overview_snapshot(static_cast<std::size_t>(std::clamp(resolution, 16, 256)));
+    out["width"] = static_cast<int64_t>(overview.width);
+    out["height"] = static_cast<int64_t>(overview.height);
+    out["cell_size"] = overview.cell_size;
+    out["origin"] = sim_godot::to_godot(overview.origin);
+    out["surface"] = to_packed_bytes(overview.surface);
+    out["plants"] = to_packed_ints(overview.plants);
+    out["herbivores"] = to_packed_ints(overview.herbivores);
+    out["omnivores"] = to_packed_ints(overview.omnivores);
+    out["carnivores"] = to_packed_ints(overview.carnivores);
+    out["insects"] = to_packed_ints(overview.insects);
+    out["render_center"] = sim_godot::to_godot(render_center_);
+    out["render_radius"] = render_radius_;
+    return out;
+}
+
 godot::Array SimWorld::get_species_catalog() const {
     Array out;
     if (!world_) {
