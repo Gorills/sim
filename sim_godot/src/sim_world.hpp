@@ -48,6 +48,8 @@ public:
     void refresh_render_interest();
 
     [[nodiscard]] godot::Ref<SimSnapshot> get_render_snapshot() const;
+    [[nodiscard]] godot::Ref<SimSnapshot> get_current_render_snapshot() const;
+    [[nodiscard]] double get_render_alpha() const;
     [[nodiscard]] godot::Ref<SimSnapshot> get_sim_snapshot() const;
     [[nodiscard]] godot::Ref<SimHabitatGrid> get_habitat_grid() const;
     [[nodiscard]] godot::Ref<SimHabitatGrid> get_render_habitat_grid() const;
