@@ -49,6 +49,10 @@ func refresh_now() -> void:
 		_refresh()
 
 
+func has_map_mesh() -> bool:
+	return _mesh_instance != null and _mesh_instance.mesh != null
+
+
 func _process(delta: float) -> void:
 	if _sim == null:
 		return
