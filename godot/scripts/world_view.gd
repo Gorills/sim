@@ -584,15 +584,15 @@ func _build_terrain_mesh(habitat: Object) -> void:
 					var u1 := float(sub_x + 1) / float(TERRAIN_SUBDIVISIONS)
 					var v0 := float(sub_z) / float(TERRAIN_SUBDIVISIONS)
 					var v1 := float(sub_z + 1) / float(TERRAIN_SUBDIVISIONS)
-					var samples := [
+					var samples: Array[Vector2] = [
 						Vector2(u0, v0),
 						Vector2(u1, v0),
 						Vector2(u1, v1),
 						Vector2(u0, v1),
 					]
-					for uv in samples:
-						var local_x := float(x) + uv.x
-						var local_z := float(z) + uv.y
+					for uv: Vector2 in samples:
+						var local_x: float = float(x) + uv.x
+						var local_z: float = float(z) + uv.y
 						st.set_color(_interpolated_base_color(local_x, local_z, width, height))
 						st.add_vertex(Vector3(
 							origin.x + local_x * cell_size,
