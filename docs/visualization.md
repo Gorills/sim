@@ -69,12 +69,14 @@ The island contains roughly nine thousand initial organisms. Running full
 ecology at 60 Hz needlessly performs habitat, canopy, plant, spatial-index, and
 animal updates sixty times per second.
 
-The visualizer now runs ecology at 20 Hz. `SimWorld::set_tick_hz()` scales
-`ecology_hours_per_tick` with the tick interval, preserving the previous
-simulated-hours-per-real-second rate at 1x speed. In other words, the optimization
-reduces update frequency without slowing ecological time.
+The visualizer runs ecology at 20 Hz. `SimWorld::set_tick_hz()` scales
+`ecology_hours_per_tick` with the tick interval. At 1x, one real second advances
+one simulated minute. This is intentionally slower than the former 15 simulated
+minutes per real second: meter-scale animal movement was otherwise presented at
+tens of metres per second and could not read as third-person locomotion.
 
-Simulation speed controls 1x / 4x / 16x remain unchanged.
+Simulation speed controls 1x / 4x / 16x remain unchanged; 4x and 16x are explicit
+time-lapse modes.
 
 ## Debug minimap
 
@@ -113,7 +115,7 @@ semantic actions from `godot/scripts/input_actions.gd`.
 
 - semantic KBM/gamepad bindings and localization;
 - render snapshot/alpha bridge required by render-rate interpolation;
-- 20 Hz simulation timing with the preserved ecology-time rate;
+- 20 Hz simulation timing with the one-simulated-minute-per-real-second 1x rate;
 - an inhabited land spawn from the aggregated overview;
 - perspective third-person camera distance near 7 m;
 - a fixed 450 m render radius;
