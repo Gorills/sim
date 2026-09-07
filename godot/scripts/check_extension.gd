@@ -120,6 +120,8 @@ func _initialize() -> void:
 	var render_bridge_ok := (
 		world.has_method("get_current_render_snapshot")
 		and world.has_method("get_render_alpha")
+		and world.has_method("get_render_generation")
+		and world.has_method("get_simulation_lod_stats")
 	)
 	var current_render_snapshot: Object = (
 		world.call("get_current_render_snapshot")
@@ -131,17 +133,40 @@ func _initialize() -> void:
 		if render_bridge_ok
 		else -1.0
 	)
+	var render_generation := (
+		int(world.call("get_render_generation"))
+		if render_bridge_ok
+		else -1
+	)
+	var lod_stats: Dictionary = (
+		world.call("get_simulation_lod_stats")
+		if render_bridge_ok
+		else {}
+	)
+	var lod_total := int(lod_stats.get("total_regions", 0))
+	var lod_sum := (
+		int(lod_stats.get("individual_regions", 0))
+		+ int(lod_stats.get("cohort_regions", 0))
+		+ int(lod_stats.get("aggregate_regions", 0))
+	)
 	render_bridge_ok = (
 		render_bridge_ok
 		and current_render_snapshot != null
 		and render_alpha >= 0.0
 		and render_alpha <= 1.0
+		and render_generation >= 0
+		and lod_total > 0
+		and lod_sum == lod_total
 	)
 	print(
 		"SIM_CHECK render_bridge_ok=",
 		render_bridge_ok,
 		" alpha=",
-		render_alpha
+		render_alpha,
+		" generation=",
+		render_generation,
+		" lod_regions=",
+		lod_total
 	)
 	if not render_bridge_ok:
 		world.free()
@@ -260,19 +285,18 @@ func _initialize() -> void:
 	var deer_id := _catalog_id(world, "deer")
 	var deer_pos := _first_species_position(full_snap, deer_id)
 	var teleport_ok := false
-	var grounding_ok := false
+	var terrain_y := float(view.call("presentation_height", spawn))
+	var presented: Vector3 = view.call("_presentation_position", spawn, 0.0)
+	var grounding_ok := (
+		terrain_y > -1.0
+		and is_equal_approx(presented.y, terrain_y)
+	)
 	if deer_pos != Vector3.INF:
 		camera_controller.call("teleport_to", deer_pos)
 		var teleported: Vector3 = camera_controller.call("anchor_position")
 		teleport_ok = Vector2(teleported.x, teleported.z).distance_to(
 			Vector2(deer_pos.x, deer_pos.z)
 		) < 0.01
-		var terrain_y := float(view.call("presentation_height", deer_pos))
-		var presented: Vector3 = view.call("_presentation_position", deer_pos, 0.0)
-		grounding_ok = (
-			terrain_y > -1.0
-			and is_equal_approx(presented.y, terrain_y)
-		)
 	print(
 		"SIM_CHECK teleport_ok=",
 		teleport_ok,
