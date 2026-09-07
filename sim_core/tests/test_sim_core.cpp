@@ -136,6 +136,23 @@ void test_stepper_can_honor_sixteen_times_speed() {
     CHECK(honest.max_steps() == 32);
 }
 
+void test_ecology_step_can_be_decoupled_from_tick_dt() {
+    sim::WorldConfig config;
+    config.tick_dt = 1.0 / 60.0;
+    config.ecology_hours_per_tick = 1.0 / 240.0;
+    sim::World world(config);
+
+    world.set_tick_dt(1.0 / 20.0);
+    world.set_ecology_hours_per_tick(1.0 / 80.0);
+
+    CHECK(world.tick_dt() == 1.0 / 20.0);
+    CHECK(world.ecology_hours_per_tick() == 1.0 / 80.0);
+
+    world.set_ecology_hours_per_tick(-1.0);
+    CHECK(world.ecology_hours_per_tick() == 1.0 / 80.0);
+}
+
+
 void test_invalid_time_values_fall_back_safely() {
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const double infinity = std::numeric_limits<double>::infinity();
@@ -958,6 +975,7 @@ int main() {
     test_pause_skips_integration();
     test_stepper_fixed_dt_and_spiral_cap();
     test_stepper_can_honor_sixteen_times_speed();
+    test_ecology_step_can_be_decoupled_from_tick_dt();
     test_invalid_time_values_fall_back_safely();
     test_habitat_and_extensible_layers_are_deterministic();
     test_habitat_large_steps_cover_full_interval();
