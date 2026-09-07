@@ -22,6 +22,7 @@ struct RuntimeOptions {
     double render_radius = 450.0;
     std::size_t overview_resolution = 48;
     SimulationLodConfig lod{};
+    bool simulation_lod_enabled = true;
 };
 
 struct RuntimeFrame {
@@ -41,6 +42,7 @@ struct RuntimeFrame {
     double render_radius = 0.0;
     std::uint64_t render_generation = 0;
     SimulationLodSummary lod_summary{};
+    SimulationWorkStats simulation_work{};
 };
 
 class SimulationRuntime {
@@ -110,7 +112,6 @@ private:
     void publish_initial();
 
     std::unique_ptr<World> world_{};
-    SimulationLodGrid lod_grid_;
 
     mutable std::mutex published_mutex_{};
     std::shared_ptr<const RuntimeFrame> published_{};
