@@ -234,6 +234,8 @@ void test_species_catalog_data_driven_web() {
     CHECK(catalog.find("mushroom")->organic_growth_factor > 0.0);
     CHECK(catalog.find("bee")->pollination_deposit_per_hour > 0.0);
     CHECK(catalog.find("bee")->nectar_energy_per_hour > 0.0);
+    CHECK(catalog.find("bee")->perception_radius >= 800.0);
+    CHECK(catalog.find("bee")->home_range_radius >= 1'500.0);
     CHECK(catalog.find("butterfly")->nectar_energy_per_hour > 0.0);
     CHECK(catalog.find("butterfly")->lifespan_hours >= 24.0 * 300.0);
 
@@ -476,10 +478,10 @@ void test_prey_flees_from_a_nearby_predator() {
     config.climate_start_hour = 24.0 * 120.0 + 19.0;
     config.habitat.width = 20;
     config.habitat.height = 20;
-    config.habitat.cell_size = 1.0;
-    config.habitat.origin = {-10.0, 0.0, -10.0};
-    config.bounds_min = {-10.0, 0.0, -10.0};
-    config.bounds_max = {10.0, 8.0, 10.0};
+    config.habitat.cell_size = 50.0;
+    config.habitat.origin = {-500.0, 0.0, -500.0};
+    config.bounds_min = {-500.0, 0.0, -500.0};
+    config.bounds_max = {500.0, 500.0, 500.0};
     sim::World world(config);
 
     sim::Vec3 rabbit_at{};
@@ -523,10 +525,10 @@ void test_roaming_keeps_a_persistent_local_target() {
     config.climate_start_hour = 24.0 * 120.0 + 21.0;
     config.habitat.width = 24;
     config.habitat.height = 24;
-    config.habitat.cell_size = 1.0;
-    config.habitat.origin = {-12.0, 0.0, -12.0};
-    config.bounds_min = {-12.0, 0.0, -12.0};
-    config.bounds_max = {12.0, 8.0, 12.0};
+    config.habitat.cell_size = 300.0;
+    config.habitat.origin = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_min = {-3'600.0, 0.0, -3'600.0};
+    config.bounds_max = {3'600.0, 500.0, 3'600.0};
     sim::World world(config);
 
     sim::Vec3 position{};
