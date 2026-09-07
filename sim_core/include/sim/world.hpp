@@ -191,6 +191,7 @@ private:
     std::vector<std::vector<std::size_t>> spatial_buckets_{};
     std::vector<Vec3> spatial_positions_{};
     std::vector<Command> commands_{};
+    std::size_t queued_spawn_count_ = 0;
 };
 
 } // namespace sim

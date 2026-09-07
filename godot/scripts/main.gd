@@ -91,12 +91,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _sim == null:
 		return
-	var paused := bool(_sim.get("paused"))
-	var snap: Object = _sim.call("get_sim_snapshot")
 	var stats: Dictionary = _sim.call("get_ecosystem_stats") if _sim.has_method("get_ecosystem_stats") else {}
-	var days := float(snap.get("simulated_hours")) / 24.0
-	var season := _season_name(float(snap.get("year_phase")))
-	var hour := float(snap.get("hour_of_day"))
+	var paused := bool(stats.get("paused", false))
+	var days := float(stats.get("simulated_hours", 0.0)) / 24.0
+	var season := _season_name(float(stats.get("year_phase", 0.0)))
+	var hour := float(stats.get("hour_of_day", 0.0))
 	_update_daylight(hour)
 	var populations: Dictionary = stats.get("populations", {})
 	hud.text = "day %.2f   %s %s   %.0fx   entities %s   %s\nclimate  moisture %.2f   %.1f C   canopy %.3f (max %.2f)   light %.2f   organic %.3f (max %.2f)   pollen %.3f (max %.2f)\nguilds  plants %s   herbivores %s   omnivores %s   carnivores %s   insects %s (activity %.2f)   decomposers %s\nbehavior  rest %s   roam %s   group %s   forage %s   feed %s   drink %s   flee %s\n%s\nSpace pause   R reset   1/2/3 speed   wheel zoom   RMB orbit   MMB pan" % [
@@ -104,16 +103,16 @@ func _process(_delta: float) -> void:
 		season,
 		_clock_text(hour),
 		_speed_scale,
-		str(_sim.call("get_entity_count")),
+		str(stats.get("entity_count", 0)),
 		"paused" if paused else "running",
-		float(snap.get("mean_moisture")),
-		float(snap.get("mean_temperature")),
-		float(snap.get("mean_canopy")),
+		float(stats.get("mean_moisture", 0.0)),
+		float(stats.get("mean_temperature", 0.0)),
+		float(stats.get("mean_canopy", 0.0)),
 		float(stats.get("max_canopy", 0.0)),
-		float(snap.get("mean_light")),
-		float(snap.get("mean_organic")),
+		float(stats.get("mean_light", 0.0)),
+		float(stats.get("mean_organic", 0.0)),
 		float(stats.get("max_organic", 0.0)),
-		float(snap.get("mean_pollination")),
+		float(stats.get("mean_pollination", 0.0)),
 		float(stats.get("max_pollination", 0.0)),
 		str(stats.get("plants", 0)),
 		str(stats.get("herbivores", 0)),

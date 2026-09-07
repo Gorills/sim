@@ -73,48 +73,60 @@ void HabitatGrid::advance(double hours, double absolute_hours, const ClimateConf
     if (!std::isfinite(hours) || hours <= 0.0) {
         return;
     }
-    const double dt = std::min(hours, 24.0);
-    const double year_phase =
-        2.0 * std::numbers::pi * std::fmod(std::max(0.0, absolute_hours), 24.0 * 365.0) /
-        (24.0 * 365.0);
-    const double day_phase =
-        2.0 * std::numbers::pi * std::fmod(std::max(0.0, absolute_hours), 24.0) / 24.0;
-    const double seasonal = std::sin(year_phase - std::numbers::pi * 0.5);
-    const double rain_cycle = std::max(0.0, std::sin(day_phase * 0.37 + year_phase * 11.0));
 
-    for (HabitatCell& value : cells_) {
-        if (value.water) {
-            value.moisture = 1.0;
-            value.temperature =
-                climate.mean_temperature + seasonal * climate.seasonal_temperature_amplitude * 0.4;
-            value.organic = 0.0;
-            value.pollination = 0.0;
-            value.light = 1.0;
-            continue;
+    double elapsed = 0.0;
+    while (elapsed < hours) {
+        const double dt = std::min(hours - elapsed, 24.0);
+        const double sample_hours = absolute_hours + elapsed;
+        const double year_phase =
+            2.0 * std::numbers::pi *
+            std::fmod(std::max(0.0, sample_hours), 24.0 * 365.0) / (24.0 * 365.0);
+        const double day_phase =
+            2.0 * std::numbers::pi * std::fmod(std::max(0.0, sample_hours), 24.0) / 24.0;
+        const double seasonal = std::sin(year_phase - std::numbers::pi * 0.5);
+        const double rain_cycle =
+            std::max(0.0, std::sin(day_phase * 0.37 + year_phase * 11.0));
+
+        for (HabitatCell& value : cells_) {
+            if (value.water) {
+                value.moisture = 1.0;
+                value.temperature =
+                    climate.mean_temperature +
+                    seasonal * climate.seasonal_temperature_amplitude * 0.4;
+                value.organic = 0.0;
+                value.pollination = 0.0;
+                value.light = 1.0;
+                continue;
+            }
+
+            value.temperature = climate.mean_temperature +
+                                seasonal * climate.seasonal_temperature_amplitude +
+                                std::sin(day_phase - std::numbers::pi * 0.5) * 2.5 -
+                                value.elevation * 5.0;
+            const double rainfall = climate.rain_per_hour * (0.35 + rain_cycle * 1.8);
+            const double heat_factor =
+                std::clamp((value.temperature + 5.0) / 35.0, 0.1, 1.5);
+            value.moisture =
+                value.fresh_water
+                    ? 1.0
+                    : std::clamp(
+                          value.moisture +
+                              (rainfall - climate.evaporation_per_hour * heat_factor) * dt,
+                          0.0, 1.0);
+            const double mineralize =
+                value.organic * climate.organic_mineralization_per_hour * dt;
+            value.organic = std::clamp(value.organic - mineralize, 0.0, 1.0);
+            value.nutrients =
+                std::clamp(
+                    value.nutrients +
+                        climate.nutrient_regeneration_per_hour * (1.0 - value.nutrients) * dt +
+                        mineralize * 0.75,
+                    0.0, 1.0);
+            value.pollination =
+                std::clamp(value.pollination - climate.pollination_decay_per_hour * dt, 0.0, 1.0);
         }
 
-        value.temperature = climate.mean_temperature +
-                            seasonal * climate.seasonal_temperature_amplitude +
-                            std::sin(day_phase - std::numbers::pi * 0.5) * 2.5 -
-                            value.elevation * 5.0;
-        const double rainfall = climate.rain_per_hour * (0.35 + rain_cycle * 1.8);
-        const double heat_factor = std::clamp((value.temperature + 5.0) / 35.0, 0.1, 1.5);
-        value.moisture =
-            value.fresh_water
-                ? 1.0
-                : std::clamp(value.moisture +
-                                 (rainfall - climate.evaporation_per_hour * heat_factor) * dt,
-                             0.0, 1.0);
-        const double mineralize =
-            value.organic * climate.organic_mineralization_per_hour * dt;
-        value.organic = std::clamp(value.organic - mineralize, 0.0, 1.0);
-        value.nutrients =
-            std::clamp(value.nutrients +
-                           climate.nutrient_regeneration_per_hour * (1.0 - value.nutrients) * dt +
-                           mineralize * 0.75,
-                       0.0, 1.0);
-        value.pollination =
-            std::clamp(value.pollination - climate.pollination_decay_per_hour * dt, 0.0, 1.0);
+        elapsed += dt;
     }
 }
 

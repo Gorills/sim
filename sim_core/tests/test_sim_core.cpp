@@ -183,6 +183,24 @@ void test_habitat_and_extensible_layers_are_deterministic() {
     CHECK(first.layer("unknown").empty());
 }
 
+void test_habitat_large_steps_cover_full_interval() {
+    sim::HabitatConfig config;
+    config.width = 12;
+    config.height = 12;
+    config.seed = 11;
+    sim::HabitatGrid combined(config);
+    sim::HabitatGrid split(config);
+    sim::ClimateConfig climate;
+
+    combined.advance(48.0, 100.0, climate);
+    split.advance(24.0, 100.0, climate);
+    split.advance(24.0, 124.0, climate);
+
+    CHECK(combined.mean_moisture() == split.mean_moisture());
+    CHECK(combined.mean_temperature() == split.mean_temperature());
+    CHECK(combined.mean_organic() == split.mean_organic());
+}
+
 void test_species_catalog_data_driven_web() {
     const sim::SpeciesCatalog catalog = sim::SpeciesCatalog::temperate_island();
     CHECK(catalog.all().size() >= 15);
@@ -586,6 +604,19 @@ void test_scenario_reports_capacity_rejection() {
     CHECK(world.entity_count() == 5);
 }
 
+void test_generic_agents_respect_capacity() {
+    sim::WorldConfig config;
+    config.max_entities = 2;
+    sim::World world(config);
+
+    CHECK(world.enqueue_spawn({0.0, 0.0, 0.0}, {}) != 0);
+    CHECK(world.enqueue_spawn({1.0, 0.0, 0.0}, {}) != 0);
+    CHECK(world.enqueue_spawn({2.0, 0.0, 0.0}, {}) == 0);
+    world.flush_commands();
+    CHECK(world.entity_count() == 2);
+    CHECK(world.enqueue_spawn({3.0, 0.0, 0.0}, {}) == 0);
+}
+
 void test_species_catalog_and_island_food_chain() {
     sim::WorldConfig config;
     config.seed = 42;
@@ -673,6 +704,7 @@ int main() {
     test_stepper_can_honor_sixteen_times_speed();
     test_invalid_time_values_fall_back_safely();
     test_habitat_and_extensible_layers_are_deterministic();
+    test_habitat_large_steps_cover_full_interval();
     test_species_catalog_data_driven_web();
     test_default_island_scale_and_habitat_snapshot();
     test_biome_layers_affect_dynamics();
@@ -683,6 +715,7 @@ int main() {
     test_animals_seek_fresh_water_when_thirsty();
     test_organic_feeding_is_a_single_observable_action();
     test_scenario_reports_capacity_rejection();
+    test_generic_agents_respect_capacity();
     test_species_catalog_and_island_food_chain();
     test_island_determinism();
     test_generic_agent_mode_still_independent();

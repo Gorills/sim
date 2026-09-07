@@ -1,0 +1,31 @@
+name: core-ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset release -DSIM_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build --preset release --parallel 2
+      - name: Test
+        run: ctest --preset release
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset debug -DSIM_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build --preset debug --parallel 2
+      - name: Test
+        run: ctest --preset debug

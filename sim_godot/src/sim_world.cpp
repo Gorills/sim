@@ -237,6 +237,10 @@ godot::Dictionary SimWorld::get_ecosystem_stats() const {
         return out;
     }
     const sim::EcosystemStats stats = world_->ecosystem_stats();
+    out["tick"] = static_cast<int64_t>(world_->tick_index());
+    out["entity_count"] = static_cast<int64_t>(world_->entity_count());
+    out["hour_of_day"] = world_->hour_of_day();
+    out["paused"] = world_->paused();
     out["simulated_hours"] = stats.simulated_hours;
     out["year_phase"] = stats.year_phase;
     out["mean_moisture"] = stats.mean_moisture;
