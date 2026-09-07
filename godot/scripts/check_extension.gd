@@ -6,6 +6,7 @@ const Actions = preload("res://scripts/input_actions.gd")
 
 var _world: Node
 var _view: Node3D
+var _world_bounds := Rect2()
 var _checked_view := false
 
 
@@ -58,6 +59,12 @@ func _initialize() -> void:
 		has_ocean = has_ocean or int(value) == 1
 		has_land = has_land or int(value) == 0
 		has_fresh = has_fresh or int(value) == 2
+	var cell_size := float(habitat.get("cell_size")) if habitat != null else 0.0
+	var habitat_origin: Vector3 = habitat.get("origin") if habitat != null else Vector3.ZERO
+	_world_bounds = Rect2(
+		Vector2(habitat_origin.x, habitat_origin.z),
+		Vector2(float(width) * cell_size, float(height) * cell_size)
+	)
 	var habitat_ok := (
 		habitat != null
 		and width >= 80
@@ -124,6 +131,37 @@ func _process(_delta: float) -> bool:
 	var camera := Camera3D.new()
 	camera.name = "CheckCamera"
 	viewport.add_child(camera)
+	var sun := DirectionalLight3D.new()
+	sun.name = "CheckSun"
+	viewport.add_child(sun)
+	var camera_controller := Node.new()
+	camera_controller.name = "CheckCameraController"
+	camera_controller.set_script(load("res://scripts/camera_controller.gd"))
+	camera_controller.set("camera_path", NodePath("../CheckCamera"))
+	camera_controller.set("sun_path", NodePath("../CheckSun"))
+	viewport.add_child(camera_controller)
+	camera_controller.call("bind_sim", _world, _world_bounds)
+	var camera_contract_ok := (
+		camera.projection == Camera3D.PROJECTION_PERSPECTIVE
+		and is_equal_approx(float(camera_controller.call("render_radius")), 1200.0)
+		and is_equal_approx(float(_world.get("render_radius")), 1200.0)
+	)
+	print(
+		"SIM_CHECK spectator_camera_ok=",
+		camera_contract_ok,
+		" projection=",
+		camera.projection,
+		" render_radius=",
+		_world.get("render_radius")
+	)
+	if not camera_contract_ok:
+		push_error("Spectator camera must stay perspective with a fixed 1.2 km render interest.")
+		camera_controller.free()
+		_view.free()
+		_world.free()
+		quit(1)
+		return true
+	camera_controller.free()
 	viewport.add_child(_view)
 	var deer_id := _catalog_id(_world, "deer")
 	var bee_id := _catalog_id(_world, "bee")
@@ -250,21 +288,7 @@ func _process(_delta: float) -> bool:
 		quit(1)
 		return true
 
-	var map_view := Node3D.new()
-	map_view.set_script(load("res://scripts/world_map_view.gd"))
-	viewport.add_child(map_view)
-	map_view.call("bind_sim", _world)
-	map_view.call("set_active", true)
-	var map_ok := bool(map_view.call("has_map_mesh"))
-	print("SIM_CHECK coarse_world_map_ok=", map_ok)
-	map_view.free()
 	_view.free()
-	if not map_ok:
-		push_error("Coarse whole-world map failed to build from overview data.")
-		_world.free()
-		quit(1)
-		return true
-
 	_world.free()
 	quit(0)
 	return true
@@ -282,16 +306,20 @@ func _check_ui_contracts() -> bool:
 	var keyboard_mouse_ok := (
 		_action_has_key(Actions.CAMERA_MOVE_FORWARD)
 		and _action_has_key(Actions.CAMERA_MOVE_BACK)
-		and _action_has_mouse(Actions.CAMERA_ORBIT_DRAG)
-		and _action_has_mouse(Actions.CAMERA_ZOOM_IN)
+		and _action_has_key(Actions.CAMERA_MOVE_UP)
+		and _action_has_key(Actions.CAMERA_MOVE_DOWN)
+		and _action_has_mouse(Actions.CAMERA_LOOK_DRAG)
+		and _action_has_mouse(Actions.CAMERA_SPEED_INCREASE)
+		and _action_has_key(Actions.CAMERA_SPEED_BOOST)
 	)
 	var gamepad_ok := (
 		_action_has_joy(Actions.CAMERA_MOVE_LEFT)
 		and _action_has_joy(Actions.CAMERA_MOVE_FORWARD)
-		and _action_has_joy(Actions.CAMERA_ORBIT_LEFT)
-		and _action_has_joy(Actions.CAMERA_ORBIT_UP)
-		and _action_has_joy(Actions.CAMERA_ZOOM_IN)
-		and _action_has_joy(Actions.VIEW_TOGGLE_OVERVIEW)
+		and _action_has_joy(Actions.CAMERA_MOVE_UP)
+		and _action_has_joy(Actions.CAMERA_MOVE_DOWN)
+		and _action_has_joy(Actions.CAMERA_LOOK_LEFT)
+		and _action_has_joy(Actions.CAMERA_LOOK_UP)
+		and _action_has_joy(Actions.CAMERA_SPEED_BOOST)
 		and _action_has_joy(Actions.SIM_TOGGLE_PAUSE)
 	)
 
@@ -300,8 +328,14 @@ func _check_ui_contracts() -> bool:
 
 	var previous_locale := TranslationServer.get_locale()
 	TranslationServer.set_locale("ru")
-	var translation_ok := str(TranslationServer.translate("UI_VIEW_MAP")) == "КАРТА МИРА"
+	var translation_ok := str(TranslationServer.translate("UI_VIEW_GOD")) == "РЕЖИМ БОГА"
 	TranslationServer.set_locale(previous_locale)
+
+	var overview_removed_ok := (
+		not FileAccess.file_exists("res://scripts/world_map_view.gd")
+		and not FileAccess.file_exists("res://scripts/world_overview.gd")
+		and not FileAccess.file_exists("res://scripts/visualization_palette.gd")
+	)
 
 	var ok := (
 		missing_actions.is_empty()
@@ -310,6 +344,7 @@ func _check_ui_contracts() -> bool:
 		and gamepad_ok
 		and theme_ok
 		and translation_ok
+		and overview_removed_ok
 	)
 	print(
 		"SIM_CHECK ui_contracts_ok=",
@@ -325,10 +360,12 @@ func _check_ui_contracts() -> bool:
 		" theme=",
 		theme_ok,
 		" translation=",
-		translation_ok
+		translation_ok,
+		" overview_removed=",
+		overview_removed_ok
 	)
 	if not ok:
-		push_error("Visualization input, theme, or localization contract is incomplete.")
+		push_error("Spectator input, theme, localization, or render-removal contract is incomplete.")
 	return ok
 
 
