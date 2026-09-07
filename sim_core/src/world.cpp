@@ -225,6 +225,11 @@ EcosystemStats World::ecosystem_stats() const {
     stats.deaths_dehydration = deaths_dehydration_;
     stats.deaths_biomass_loss = deaths_biomass_loss_;
 
+    std::vector<SpeciesPopulation> populations;
+    populations.reserve(species_.all().size());
+    std::unordered_map<SpeciesId, std::size_t> population_index;
+    population_index.reserve(species_.all().size());
+
     for (const SpeciesDefinition& definition : species_.all()) {
         SpeciesPopulation population;
         population.species_id = definition.id;
@@ -239,36 +244,32 @@ EcosystemStats World::ecosystem_stats() const {
             dehydrated == deaths_dehydration_by_species_.end() ? 0 : dehydrated->second;
         population.deaths_biomass_loss =
             biomass == deaths_biomass_by_species_.end() ? 0 : biomass->second;
-        for (const Entity& entity : entities_) {
-            if (entity.species_id == definition.id) {
-                ++population.count;
-                population.biomass += entity.biomass;
-                if (is_animal(entity.kind)) {
-                    population.mean_energy_fraction +=
-                        entity.energy / std::max(0.001, definition.max_energy);
-                    population.mean_hydration += entity.hydration;
-                }
-            }
-        }
-        const bool had_deaths =
-            (population.deaths_age + population.deaths_starvation +
-             population.deaths_dehydration + population.deaths_biomass_loss) != 0;
-        if (population.count != 0 || had_deaths) {
-            if (population.count != 0 && is_animal(definition.kind)) {
-                population.mean_energy_fraction /= static_cast<double>(population.count);
-                population.mean_hydration /= static_cast<double>(population.count);
-            }
-            stats.populations.push_back(population);
-        }
+        population_index.emplace(definition.id, populations.size());
+        populations.push_back(population);
     }
 
     double insect_activity_sum = 0.0;
     std::size_t insect_activity_samples = 0;
+
     for (const Entity& entity : entities_) {
         const SpeciesDefinition* definition = species_.find(entity.species_id);
-        if (definition != nullptr && has_tag(*definition, "decomposer")) {
-            ++stats.decomposers;
+        if (definition != nullptr) {
+            if (const auto population_it = population_index.find(entity.species_id);
+                population_it != population_index.end()) {
+                SpeciesPopulation& population = populations[population_it->second];
+                ++population.count;
+                population.biomass += entity.biomass;
+                if (is_animal(entity.kind)) {
+                    population.mean_energy_fraction +=
+                        entity.energy / std::max(0.001, definition->max_energy);
+                    population.mean_hydration += entity.hydration;
+                }
+            }
+            if (has_tag(*definition, "decomposer")) {
+                ++stats.decomposers;
+            }
         }
+
         switch (entity.kind) {
         case EntityKind::plant:
             ++stats.plants;
@@ -282,17 +283,17 @@ EcosystemStats World::ecosystem_stats() const {
         case EntityKind::carnivore:
             ++stats.carnivores;
             break;
-        case EntityKind::insect: {
+        case EntityKind::insect:
             ++stats.insects;
-            const HabitatCell* cell = habitat_.cell_at(entity.position);
             insect_activity_sum +=
-                definition != nullptr ? activity_factor(*definition, cell) : 1.0;
+                definition != nullptr ? activity_factor(*definition, habitat_.cell_at(entity.position))
+                                      : 1.0;
             ++insect_activity_samples;
             break;
-        }
         case EntityKind::generic:
             break;
         }
+
         switch (entity.intent) {
         case BehaviorIntent::resting:
             ++stats.resting;
@@ -319,6 +320,22 @@ EcosystemStats World::ecosystem_stats() const {
             break;
         }
     }
+
+    for (SpeciesPopulation& population : populations) {
+        const bool had_deaths =
+            (population.deaths_age + population.deaths_starvation +
+             population.deaths_dehydration + population.deaths_biomass_loss) != 0;
+        if (population.count == 0 && !had_deaths) {
+            continue;
+        }
+        const SpeciesDefinition* definition = species_.find(population.species_id);
+        if (population.count != 0 && definition != nullptr && is_animal(definition->kind)) {
+            population.mean_energy_fraction /= static_cast<double>(population.count);
+            population.mean_hydration /= static_cast<double>(population.count);
+        }
+        stats.populations.push_back(population);
+    }
+
     if (insect_activity_samples != 0) {
         stats.mean_insect_activity =
             insect_activity_sum / static_cast<double>(insect_activity_samples);
