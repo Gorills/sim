@@ -249,6 +249,7 @@ void test_species_catalog_data_driven_web() {
     CHECK(deer != nullptr && deer->home_range_radius >= 1'000.0);
     CHECK(wolf != nullptr && wolf->home_range_radius >= 3'000.0);
     CHECK(wolf != nullptr && wolf->perception_radius < wolf->home_range_radius);
+    CHECK(wolf != nullptr && wolf->initial_group_size == 4);
     CHECK(fox != nullptr && fox->home_range_radius >= 1'500.0);
 
     for (const sim::SpeciesDefinition& definition : catalog.all()) {
